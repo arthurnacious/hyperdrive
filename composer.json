@@ -1,0 +1,27 @@
+{
+    "name": "hyperdrive/framework",
+    "description": "Hyperdrive - PHP Framework inspired by NestJS with OpenSwoole",
+    "version": "0.0.1",
+    "type": "library",
+    "require": {
+        "symfony/console": "^6.0",
+        "php": ">=8.4"
+    },
+    "scripts": {
+        "test": "./vendor/bin/pest tests/*"
+    },
+    "require-dev": {
+        "pestphp/pest": "^2.0",
+        "pestphp/pest-plugin-arch": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Hyperdrive\\": "src/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    }
+}

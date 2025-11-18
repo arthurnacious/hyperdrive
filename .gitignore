@@ -1,0 +1,12 @@
+# Composer
+/vendor/
+/composer.lock
+
+# VSCode
+/.vscode/
+
+# Runtime / cache
+/cache/
+/tmp/
+/logs/
+/storage/
