@@ -130,4 +130,35 @@ class ArchitectureTest extends TestCase
             $this->assertTrue($method->isStatic(), "Environment::{$method->getName()} should be static");
         }
     }
+
+    public function test_request_is_immutable(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Http\Request::class);
+
+        // Check that withAttribute returns new instance
+        $methods = $reflection->getMethods();
+        $hasWithAttribute = false;
+
+        foreach ($methods as $method) {
+            if ($method->getName() === 'withAttribute') {
+                $returnType = $method->getReturnType();
+                $this->assertEquals('self', $returnType?->getName());
+                $hasWithAttribute = true;
+            }
+        }
+
+        $this->assertTrue($hasWithAttribute);
+    }
+
+    public function test_dto_is_abstract(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Http\Dto::class);
+        $this->assertTrue($reflection->isAbstract());
+    }
+
+    public function test_json_response_extends_response(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Http\JsonResponse::class);
+        $this->assertTrue($reflection->isSubclassOf(\Hyperdrive\Http\Response::class));
+    }
 }
