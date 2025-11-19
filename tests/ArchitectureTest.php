@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Hyperdrive\Tests;
 
+use Hyperdrive\Attributes\Http\Route;
+use Hyperdrive\Attributes\Http\Verbs\Delete;
+use Hyperdrive\Attributes\Http\Verbs\Get;
+use Hyperdrive\Attributes\Http\Verbs\Patch;
+use Hyperdrive\Attributes\Http\Verbs\Post;
+use Hyperdrive\Attributes\Http\Verbs\Put;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -42,5 +48,60 @@ class ArchitectureTest extends TestCase
     {
         $reflection = new \ReflectionClass(\Hyperdrive\Container\ContainerException::class);
         $this->assertTrue($reflection->isSubclassOf(\Exception::class));
+    }
+
+    public function test_http_verb_attributes_are_final(): void
+    {
+        $verbs = [
+            Get::class,
+            Post::class,
+            Put::class,
+            Delete::class,
+            Patch::class,
+            Route::class,
+        ];
+
+        foreach ($verbs as $verb) {
+            $reflection = new \ReflectionClass($verb);
+            $this->assertTrue($reflection->isFinal(), "{$verb} should be final");
+        }
+    }
+
+    public function test_http_verb_attributes_have_method_target(): void
+    {
+        $verbs = [
+            Get::class,
+            Post::class,
+            Put::class,
+            Delete::class,
+            Patch::class,
+        ];
+
+        foreach ($verbs as $verb) {
+            $reflection = new \ReflectionClass($verb);
+            $attributes = $reflection->getAttributes(\Attribute::class);
+            $attribute = $attributes[0]->newInstance();
+            $this->assertEquals(\Attribute::TARGET_METHOD, $attribute->flags, "{$verb} should target methods");
+        }
+    }
+
+    public function test_route_attribute_has_class_target(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Attributes\Http\Route::class);
+        $attributes = $reflection->getAttributes(\Attribute::class);
+        $attribute = $attributes[0]->newInstance();
+        $this->assertEquals(\Attribute::TARGET_CLASS, $attribute->flags);
+    }
+
+    public function test_router_is_not_final(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Routing\Router::class);
+        $this->assertFalse($reflection->isFinal());
+    }
+
+    public function test_route_definition_is_not_final(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Routing\RouteDefinition::class);
+        $this->assertFalse($reflection->isFinal());
     }
 }
