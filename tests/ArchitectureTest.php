@@ -104,4 +104,30 @@ class ArchitectureTest extends TestCase
         $reflection = new \ReflectionClass(\Hyperdrive\Routing\RouteDefinition::class);
         $this->assertFalse($reflection->isFinal());
     }
+
+    public function test_config_is_singleton(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Config\Config::class);
+        $methods = $reflection->getMethods(\ReflectionMethod::IS_PUBLIC);
+
+        $hasGetInstance = false;
+        foreach ($methods as $method) {
+            if ($method->isStatic() && $method->getName() === 'getInstance') {
+                $hasGetInstance = true;
+                break;
+            }
+        }
+
+        $this->assertTrue($hasGetInstance, 'Config should have getInstance method for singleton pattern');
+    }
+
+    public function test_environment_methods_are_static(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Config\Environment::class);
+        $methods = $reflection->getMethods(\ReflectionMethod::IS_PUBLIC);
+
+        foreach ($methods as $method) {
+            $this->assertTrue($method->isStatic(), "Environment::{$method->getName()} should be static");
+        }
+    }
 }
