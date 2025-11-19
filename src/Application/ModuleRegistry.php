@@ -4,9 +4,17 @@ declare(strict_types=1);
 
 namespace Hyperdrive\Application;
 
+use Hyperdrive\Container\Container;
+
 class ModuleRegistry
 {
     private array $modules = [];
+    private ?Container $container = null;
+
+    public function setContainer(Container $container): void
+    {
+        $this->container = $container;
+    }
 
     public function register(string $moduleClass): void
     {
@@ -17,9 +25,14 @@ class ModuleRegistry
         $metadata = $this->resolveModuleMetadata($moduleClass);
         $this->modules[$moduleClass] = $metadata;
 
-        // Register all imported modules recursively
+        // Register all imported modules recursively FIRST
         foreach ($metadata['imports'] as $importedModule) {
             $this->register($importedModule);
+        }
+
+        // THEN register bindings and injectables with the container
+        if ($this->container) {
+            $this->registerModuleBindings($metadata);
         }
     }
 
@@ -65,5 +78,24 @@ class ModuleRegistry
             'injectables' => $moduleAttribute->injectables,
             'exports' => $moduleAttribute->exports,
         ];
+    }
+
+    private function registerModuleBindings(array $metadata): void
+    {
+        // First, register all interface bindings
+        foreach ($metadata['injectables'] as $key => $value) {
+            if (is_string($key)) {
+                // This is an interface => implementation binding
+                $this->container->bind($key, $value);
+            }
+        }
+
+        // Then, register concrete classes (which may depend on the interface bindings)
+        foreach ($metadata['injectables'] as $key => $value) {
+            if (!is_string($key)) {
+                // This is a concrete class registration
+                $this->container->get($value); // This will auto-register it
+            }
+        }
     }
 }
