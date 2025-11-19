@@ -60,4 +60,11 @@ class Environment
 
         return $env;
     }
+
+    public static function setTesting(bool $testing): void
+    {
+        if ($testing) {
+            self::$environment = 'testing';
+        }
+    }
 }

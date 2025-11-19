@@ -188,4 +188,30 @@ class ArchitectureTest extends TestCase
         $reflection = new \ReflectionClass(\Hyperdrive\WebSocket\WebSocketRegistry::class);
         $this->assertFalse($reflection->isFinal());
     }
+
+    public function test_driver_interface_defines_required_methods(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Contracts\DriverInterface::class);
+        $methods = $reflection->getMethods();
+
+        $methodNames = array_map(fn($m) => $m->getName(), $methods);
+
+        $this->assertContains('boot', $methodNames);
+        $this->assertContains('listen', $methodNames);
+        $this->assertContains('handleRequest', $methodNames);
+        $this->assertContains('isRunning', $methodNames);
+        $this->assertContains('stop', $methodNames);
+    }
+
+    public function test_abstract_driver_implements_interface(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Drivers\AbstractDriver::class);
+        $this->assertTrue($reflection->implementsInterface(\Hyperdrive\Contracts\DriverInterface::class));
+    }
+
+    public function test_hyperdrive_is_final(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Application\Hyperdrive::class);
+        $this->assertTrue($reflection->isFinal());
+    }
 }
