@@ -45,7 +45,7 @@ class OpenSwooleDriver extends AbstractServerDriver
         // Convert Swoole request to framework request
         $request = $this->createRequestFromSwoole($swooleRequest);
 
-        // Handle the request using our framework
+        // Handle the request using our framework (inherited from AbstractServerDriver)
         $response = $this->handleFrameworkRequest($request);
 
         // Convert framework response to Swoole response
@@ -62,29 +62,6 @@ class OpenSwooleDriver extends AbstractServerDriver
             files: $swooleRequest->files ?? [],
             server: $swooleRequest->server ?? [],
             content: $swooleRequest->rawContent() ?: null
-        );
-    }
-
-    private function handleFrameworkRequest(Request $request): Response
-    {
-        if (!$this->router) {
-            return new Response('Router not initialized', 500);
-        }
-
-        $route = $this->router->findRoute(
-            $request->getMethod(),
-            $request->getPath()
-        );
-
-        if (!$route) {
-            return new Response('Not Found', 404);
-        }
-
-        // TODO: Actually call the controller method with DI
-        return new Response(
-            "OpenSwoole: Handled {$request->getMethod()} {$request->getPath()}",
-            200,
-            ['Content-Type' => 'text/plain']
         );
     }
 

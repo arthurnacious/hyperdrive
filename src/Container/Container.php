@@ -8,6 +8,7 @@ class Container
 {
     private array $instances = [];
     private array $bindings = [];
+    private array $resolving = []; // Track currently resolving classes
 
     public function get(string $id): object
     {
@@ -15,12 +16,24 @@ class Container
             return $this->instances[$id];
         }
 
-        // Check if there's a binding for this interface/abstract
-        if (isset($this->bindings[$id])) {
-            return $this->get($this->bindings[$id]);
+        // Check if we're already resolving this class (circular dependency)
+        if (isset($this->resolving[$id])) {
+            throw new ContainerException("Circular dependency detected while resolving: {$id}");
         }
 
-        return $this->resolve($id);
+        $this->resolving[$id] = true;
+
+        try {
+            // Check if there's a binding for this interface/abstract
+            if (isset($this->bindings[$id])) {
+                return $this->get($this->bindings[$id]);
+            }
+
+            return $this->resolve($id);
+        } finally {
+            // Always remove from resolving stack
+            unset($this->resolving[$id]);
+        }
     }
 
     public function has(string $id): bool

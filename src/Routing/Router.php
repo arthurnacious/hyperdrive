@@ -88,9 +88,8 @@ class Router
         }
 
         if ($httpMethod !== null) {
-            // If no path is specified, use empty string (which becomes root when combined with prefix)
-            $path = $path ?: '';
-            $fullPath = $this->buildPath($prefix, $path);
+            $fullPath = $this->buildPath($prefix, $path ?: '');
+            // Store the pattern (with {param} placeholders), not a concrete path
             $this->routes[] = new RouteDefinition($httpMethod, $fullPath, $controllerClass, $method->getName());
         }
     }

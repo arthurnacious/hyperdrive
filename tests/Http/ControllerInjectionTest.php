@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace Hyperdrive\Tests\Http;
 
-use Hyperdrive\Attributes\Http\Verbs\Post;
 use Hyperdrive\Attributes\Http\Route;
-use Hyperdrive\Http\Dto;
+use Hyperdrive\Attributes\Http\Verbs\Post;
 use Hyperdrive\Http\JsonResponse;
 use Hyperdrive\Http\Request;
 use Hyperdrive\Routing\Router;
 use PHPUnit\Framework\TestCase;
 
-class CreateUserDto extends Dto
+class InjectionCreateUserDto extends \Hyperdrive\Http\Dto
 {
     public string $name;
     public string $email;
@@ -20,10 +19,10 @@ class CreateUserDto extends Dto
 }
 
 #[Route('/users')]
-class TestUserController
+class InjectionTestUserController
 {
     #[Post]
-    public function create(Request $request, CreateUserDto $dto): JsonResponse
+    public function create(Request $request, InjectionCreateUserDto $dto): JsonResponse
     {
         $userId = $request->getAttribute('user_sub');
         $tenantId = $request->getAttribute('tenant_id');
@@ -49,7 +48,7 @@ class ControllerInjectionTest extends TestCase
     public function test_it_can_inject_request_and_dto_into_controller(): void
     {
         $router = new Router();
-        $router->registerController(TestUserController::class);
+        $router->registerController(InjectionTestUserController::class);
 
         $route = $router->findRoute('POST', '/users');
         $this->assertNotNull($route);
@@ -65,10 +64,10 @@ class ControllerInjectionTest extends TestCase
 
         // Simulate DTO creation from request body
         $dtoData = ['name' => 'John Doe', 'email' => 'john@example.com'];
-        $dto = new CreateUserDto($dtoData);
+        $dto = new InjectionCreateUserDto($dtoData);
 
         // Call the controller method directly
-        $controller = new TestUserController();
+        $controller = new InjectionTestUserController();
         $response = $controller->create($request, $dto);
 
         $this->assertEquals(201, $response->getStatusCode());
