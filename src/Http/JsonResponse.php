@@ -6,14 +6,15 @@ namespace Hyperdrive\Http;
 
 class JsonResponse extends Response
 {
-    public function __construct(array $data, int $status = 200, array $headers = [])
+    public function __construct(?array $data, int $status = 200, array $headers = [])
     {
         $headers['Content-Type'] = 'application/json';
 
-        parent::__construct(
-            json_encode($data, JSON_THROW_ON_ERROR),
-            $status,
-            $headers
-        );
+        $content = '';
+        if ($status !== 204 && $status !== 304) { // No content statuses
+            $content = $data !== null ? json_encode($data, JSON_THROW_ON_ERROR) : 'null';
+        }
+
+        parent::__construct($content, $status, $headers);
     }
 }

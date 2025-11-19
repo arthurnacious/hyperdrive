@@ -4,10 +4,23 @@ declare(strict_types=1);
 
 namespace Hyperdrive\Drivers;
 
+use Hyperdrive\Routing\Router;
+
 abstract class AbstractServerDriver extends AbstractDriver
 {
     protected string $protocol = 'http';
     protected array $serverOptions = [];
+    protected ?Router $router = null;
+
+    public function boot(): void
+    {
+        $this->running = true;
+
+        // Only initialize router if not already set
+        if (!$this->router) {
+            $this->router = new Router();
+        }
+    }
 
     public function setServerOptions(array $options): void
     {
@@ -22,6 +35,11 @@ abstract class AbstractServerDriver extends AbstractDriver
         }
 
         $this->startServer($port, $host);
+    }
+
+    public function setRouter(Router $router): void
+    {
+        $this->router = $router;
     }
 
     abstract protected function startServer(int $port, string $host): void;

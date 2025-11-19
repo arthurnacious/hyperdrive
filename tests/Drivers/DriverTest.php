@@ -6,7 +6,6 @@ namespace Hyperdrive\Tests\Drivers;
 
 use Hyperdrive\Application\Hyperdrive;
 use Hyperdrive\Config\Environment;
-use Hyperdrive\Contracts\DriverInterface;
 use PHPUnit\Framework\TestCase;
 
 class TestModule {}

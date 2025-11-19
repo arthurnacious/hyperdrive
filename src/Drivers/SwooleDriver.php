@@ -9,10 +9,6 @@ use Hyperdrive\Http\Response;
 
 class SwooleDriver extends AbstractServerDriver
 {
-    public function boot(): void
-    {
-        $this->running = true;
-    }
 
     protected function startServer(int $port, string $host): void
     {

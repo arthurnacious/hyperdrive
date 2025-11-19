@@ -18,6 +18,7 @@ class Router
 
     public function registerController(string $controllerClass): void
     {
+
         $reflection = new \ReflectionClass($controllerClass);
 
         // Get class-level Route attribute for prefix
