@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Hyperdrive\Tests;
 
 use PHPUnit\Framework\TestCase;
@@ -28,5 +30,17 @@ class ArchitectureTest extends TestCase
 
         $attribute = $attributes[0]->newInstance();
         $this->assertEquals(\Attribute::TARGET_CLASS, $attribute->flags);
+    }
+
+    public function test_container_is_not_final(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Container\Container::class);
+        $this->assertFalse($reflection->isFinal());
+    }
+
+    public function test_container_exception_extends_base_exception(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Container\ContainerException::class);
+        $this->assertTrue($reflection->isSubclassOf(\Exception::class));
     }
 }
