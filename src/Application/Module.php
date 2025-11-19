@@ -13,6 +13,7 @@ final class Module
         public array $imports = [],
         public array $controllers = [],
         public array $injectables = [],
-        public array $exports = []
+        public array $exports = [],
+        public array $gateways = []
     ) {}
 }

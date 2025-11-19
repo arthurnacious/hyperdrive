@@ -161,4 +161,31 @@ class ArchitectureTest extends TestCase
         $reflection = new \ReflectionClass(\Hyperdrive\Http\JsonResponse::class);
         $this->assertTrue($reflection->isSubclassOf(\Hyperdrive\Http\Response::class));
     }
+
+    public function test_websocket_attributes_are_final(): void
+    {
+        $attributes = [
+            \Hyperdrive\Attributes\WebSocket\WebSocketGateway::class,
+            \Hyperdrive\Attributes\WebSocket\OnConnection::class,
+            \Hyperdrive\Attributes\WebSocket\OnMessage::class,
+            \Hyperdrive\Attributes\WebSocket\OnDisconnection::class,
+        ];
+
+        foreach ($attributes as $attribute) {
+            $reflection = new \ReflectionClass($attribute);
+            $this->assertTrue($reflection->isFinal(), "{$attribute} should be final");
+        }
+    }
+
+    public function test_websocket_connection_is_interface(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\WebSocket\WebSocketConnection::class);
+        $this->assertTrue($reflection->isInterface());
+    }
+
+    public function test_websocket_registry_is_not_final(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\WebSocket\WebSocketRegistry::class);
+        $this->assertFalse($reflection->isFinal());
+    }
 }

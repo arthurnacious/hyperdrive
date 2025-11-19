@@ -67,7 +67,13 @@ class ModuleRegistry
         $attributes = $reflection->getAttributes(Module::class);
 
         if (empty($attributes)) {
-            return ['imports' => [], 'controllers' => [], 'injectables' => [], 'exports' => []];
+            return [
+                'imports' => [],
+                'controllers' => [],
+                'injectables' => [],
+                'exports' => [],
+                'gateways' => []
+            ];
         }
 
         $moduleAttribute = $attributes[0]->newInstance();
@@ -77,6 +83,7 @@ class ModuleRegistry
             'controllers' => $moduleAttribute->controllers,
             'injectables' => $moduleAttribute->injectables,
             'exports' => $moduleAttribute->exports,
+            'gateways' => $moduleAttribute->gateways,
         ];
     }
 
@@ -97,5 +104,10 @@ class ModuleRegistry
                 $this->container->get($value); // This will auto-register it
             }
         }
+    }
+
+    public function getGateways(string $moduleClass): array
+    {
+        return $this->modules[$moduleClass]['gateways'] ?? [];
     }
 }
