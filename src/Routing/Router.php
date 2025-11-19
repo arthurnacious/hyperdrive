@@ -96,25 +96,7 @@ class Router
 
     private function buildPath(string $prefix, string $path): string
     {
-        $prefix = rtrim($prefix, '/');
-        $path = ltrim($path, '/');
-
-        if ($prefix === '' && $path === '') {
-            return '/';
-        }
-
-        if ($prefix && $path) {
-            return $prefix . '/' . $path;
-        }
-
-        $result = $prefix . $path;
-
-        // Ensure the result always starts with a slash
-        if ($result !== '' && $result[0] !== '/') {
-            $result = '/' . $result;
-        }
-
-        return $result;
+        return \Hyperdrive\Support\PathBuilder::build($prefix, $path);
     }
 
     /**

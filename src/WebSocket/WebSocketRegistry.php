@@ -102,13 +102,6 @@ class WebSocketRegistry
 
     private function buildPath(string $prefix, string $path): string
     {
-        $prefix = trim($prefix, '/');
-        $path = trim($path, '/');
-
-        if ($prefix && $path) {
-            return '/' . $prefix . '/' . $path;
-        }
-
-        return '/' . $prefix . $path;
+        return \Hyperdrive\Support\PathBuilder::build($prefix, $path);
     }
 }
