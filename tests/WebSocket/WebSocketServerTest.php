@@ -63,7 +63,18 @@ class WebSocketServerTest extends TestCase
 {
     public function test_it_can_create_websocket_server(): void
     {
-        $server = new OpenSwooleWebSocketServer('/chat');
+        $gatewayConfig = [
+            'path' => '/chat',
+            'prefix' => 'ws',
+            'methods' => [
+                'onConnection' => null,
+                'onMessage' => [],
+                'onDisconnection' => null,
+            ],
+            'class' => ServerTestChatGateway::class
+        ];
+
+        $server = new OpenSwooleWebSocketServer('/chat', $gatewayConfig);
 
         $this->assertInstanceOf(OpenSwooleWebSocketServer::class, $server);
         $this->assertFalse($server->isRunning());

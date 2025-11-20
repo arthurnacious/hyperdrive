@@ -27,16 +27,21 @@ class OpenSwooleDriver extends AbstractServerDriver
         $this->webSocketDispatcher = new WebSocketGatewayDispatcher($this->container);
     }
 
-    protected function startServer(int $port, string $host): void
+    protected function startServer(int $port = 3000, string $host = '0.0.0.0'): void
     {
+        $port = $port ?? $this->getServerPort();
+        $host = $host ?? $this->getServerHost();
+
         $this->server = new OpenSwooleServer($host, $port);
 
-        $this->server->on('start', function (OpenSwooleServer $server) use ($host, $port) {
+        $this->server->on('start', function () use ($host, $port) {
             $url = $this->getServerUrl($host, $port);
             $this->logServerStart('OpenSwoole', $url);
 
-            // Start WebSocket servers for registered gateways
-            $this->startWebSocketServers();
+            // Start WebSocket servers if enabled
+            if ($this->isWebSocketEnabled()) {
+                $this->startWebSocketServers();
+            }
         });
 
         $this->server->on('request', function (
@@ -52,6 +57,18 @@ class OpenSwooleDriver extends AbstractServerDriver
             \OpenSwoole\Http\Response $response
         ) {
             return $this->handleWebSocketHandshake($request, $response);
+        });
+
+        // WebSocket frame handling
+        $this->server->on('message', function (
+            OpenSwooleWebSocketServer $server,
+            \OpenSwoole\WebSocket\Frame $frame
+        ) {
+            $this->handleWebSocketMessage($server, $frame);
+        });
+
+        $this->server->on('close', function (OpenSwooleServer $server, int $fd) {
+            $this->handleWebSocketClose($server, $fd);
         });
 
         $this->server->start();
@@ -94,15 +111,36 @@ class OpenSwooleDriver extends AbstractServerDriver
         return true;
     }
 
+    private function handleWebSocketMessage(
+        OpenSwooleWebSocketServer $server,
+        \OpenSwoole\WebSocket\Frame $frame
+    ): void {
+        // This is handled by the individual WebSocket servers
+        // The message event is delegated to the appropriate server based on the connection
+    }
+
+    private function handleWebSocketClose(OpenSwooleServer $server, int $fd): void
+    {
+        // This is handled by the individual WebSocket servers
+    }
+
     private function startWebSocketServers(): void
     {
         foreach ($this->webSocketRegistry->getGateways() as $gateway) {
-            $server = new OpenSwooleWebSocketServer($gateway['path']);
+            $server = new OpenSwooleWebSocketServer($gateway['path'], $gateway);
+            $server->setDispatcher($this->webSocketDispatcher);
 
-            // TODO: Integrate with gateway dispatcher
+            // Use WebSocket-specific host/port from config
+            $websocketHost = $this->getWebSocketHost();
+            $websocketPort = $this->getWebSocketPort();
+
+            // Store the server for this gateway path
             $this->webSocketServers[$gateway['path']] = $server;
 
-            echo "🔌 WebSocket gateway registered: {$gateway['path']}\n";
+            echo "🔌 WebSocket gateway registered: ws://{$websocketHost}:{$websocketPort}{$gateway['path']}\n";
+
+            // Start the WebSocket server
+            $server->start($websocketPort, $websocketHost);
         }
     }
 
@@ -110,7 +148,40 @@ class OpenSwooleDriver extends AbstractServerDriver
     {
         if ($this->webSocketRegistry) {
             $this->webSocketRegistry->registerGateway($gatewayClass);
+
+            // If server is already running, start the WebSocket server immediately
+            if ($this->running && $this->server) {
+                $this->startWebSocketServerForGateway($gatewayClass);
+            }
         }
+    }
+
+    private function startWebSocketServerForGateway(string $gatewayClass): void
+    {
+        $gateway = $this->webSocketRegistry->getGateway($gatewayClass);
+        if ($gateway) {
+            $server = new OpenSwooleWebSocketServer($gateway['path'], $gateway);
+            $server->setDispatcher($this->webSocketDispatcher);
+            $this->webSocketServers[$gateway['path']] = $server;
+
+            echo "🔌 WebSocket gateway started: {$gateway['path']}\n";
+        }
+    }
+
+    public function getWebSocketServers(): array
+    {
+        return $this->webSocketServers;
+    }
+
+    public function getServerPort(): int
+    {
+        // Default port - in real implementation, this would come from config
+        return 3000;
+    }
+
+    public function getServerHost(): string
+    {
+        return '0.0.0.0';
     }
 
     public function handleRequest(Request $request): Response

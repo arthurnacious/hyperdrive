@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hyperdrive\Drivers;
 
+use Hyperdrive\Config\Config;
 use Hyperdrive\Container\Container;
 use Hyperdrive\Http\ControllerDispatcher;
 use Hyperdrive\Http\JsonResponse;
@@ -13,6 +14,7 @@ use Hyperdrive\Routing\Router;
 
 abstract class AbstractServerDriver extends AbstractDriver
 {
+
     protected string $protocol = 'http';
     protected array $serverOptions = [];
     protected ?Router $router = null;
@@ -34,6 +36,31 @@ abstract class AbstractServerDriver extends AbstractDriver
         }
 
         $this->dispatcher = new ControllerDispatcher($this->container);
+    }
+
+    public function getServerHost(): string
+    {
+        return Config::get('server.http.host', '0.0.0.0');
+    }
+
+    public function getServerPort(): int
+    {
+        return Config::get('server.http.port', 3000);
+    }
+
+    public function getWebSocketHost(): string
+    {
+        return Config::get('server.websocket.host', $this->getServerHost());
+    }
+
+    public function getWebSocketPort(): int
+    {
+        return Config::get('server.websocket.port', $this->getServerPort());
+    }
+
+    public function isWebSocketEnabled(): bool
+    {
+        return Config::get('server.websocket.enabled', true);
     }
 
     public function setServerOptions(array $options): void

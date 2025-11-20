@@ -12,16 +12,28 @@ class OpenSwooleWebSocketServer implements WebSocketServer
     private ?OpenSwooleServer $server = null;
     private array $connections = [];
     private bool $running = false;
+    private ?WebSocketGatewayDispatcher $dispatcher = null;
+    private ?array $gateway = null;
 
     public function __construct(
-        private string $path
+        private string $path,
+        private array $gatewayConfig
     ) {}
+
+    public function setDispatcher(WebSocketGatewayDispatcher $dispatcher): void
+    {
+        $this->dispatcher = $dispatcher;
+    }
 
     public function start(int $port = 3000, string $host = '0.0.0.0'): void
     {
+        $port = $port ?? 3000;
+        $host = $host ?? '0.0.0.0';
+
         $this->server = new OpenSwooleServer($host, $port);
 
-        $this->server->on('start', function (OpenSwooleServer $server) use ($host, $port) {
+        // $this->server->on('start', function (OpenSwooleServer $server) use ($host, $port) {
+        $this->server->on('start', function () use ($host, $port) {
             $this->running = true;
             echo "🚀 WebSocket server listening on ws://{$host}:{$port}{$this->path}\n";
         });
@@ -34,10 +46,13 @@ class OpenSwooleWebSocketServer implements WebSocketServer
                 'attributes' => []
             ];
 
+            // Store connection ID in the server for later use
+            $server->connections[$request->fd] = $connectionId;
+
             echo "🔗 WebSocket connection opened: {$connectionId}\n";
 
-            // Store connection ID in the request object for later use
-            $server->connections[$request->fd] = $connectionId;
+            // Dispatch connection event to gateway
+            $this->dispatchConnection($connectionId);
         });
 
         $this->server->on('message', function (OpenSwooleServer $server, Frame $frame) {
@@ -50,18 +65,20 @@ class OpenSwooleWebSocketServer implements WebSocketServer
 
             echo "📨 WebSocket message from {$connectionId}: " . json_encode($data) . "\n";
 
-            // This will be handled by the gateway
-            $this->onMessage($connectionId, $data);
+            // Dispatch message event to gateway
+            $this->dispatchMessage($connectionId, $data);
         });
 
         $this->server->on('close', function (OpenSwooleServer $server, int $fd) {
             $connectionId = $server->connections[$fd] ?? null;
             if ($connectionId && isset($this->connections[$connectionId])) {
-                unset($this->connections[$connectionId]);
-                unset($server->connections[$fd]);
                 echo "🔒 WebSocket connection closed: {$connectionId}\n";
 
-                $this->onDisconnection($connectionId);
+                // Dispatch disconnection event to gateway
+                $this->dispatchDisconnection($connectionId);
+
+                unset($this->connections[$connectionId]);
+                unset($server->connections[$fd]);
             }
         });
 
@@ -72,7 +89,7 @@ class OpenSwooleWebSocketServer implements WebSocketServer
     {
         $this->running = false;
         if ($this->server) {
-            $this->server->stop();
+            $this->server->stop(-1);
         }
     }
 
@@ -124,14 +141,34 @@ class OpenSwooleWebSocketServer implements WebSocketServer
         return uniqid('conn_', true);
     }
 
-    // These will be called by the gateway
-    private function onMessage(string $connectionId, array $data): void
+    private function dispatchConnection(string $connectionId): void
     {
-        // To be implemented by gateway integration
+        if (!$this->dispatcher || !$this->gatewayConfig) {
+            return;
+        }
+
+        $connection = new OpenSwooleWebSocketConnection($this, $connectionId);
+        $this->dispatcher->dispatchConnection($this->gatewayConfig, $connection);
     }
 
-    private function onDisconnection(string $connectionId): void
+    private function dispatchMessage(string $connectionId, array $data): void
     {
-        // To be implemented by gateway integration  
+        if (!$this->dispatcher || !$this->gatewayConfig) {
+            return;
+        }
+
+        $connection = new OpenSwooleWebSocketConnection($this, $connectionId);
+        $message = new WebSocketMessage($data, $connection);
+        $this->dispatcher->dispatchMessage($this->gatewayConfig, $message);
+    }
+
+    private function dispatchDisconnection(string $connectionId): void
+    {
+        if (!$this->dispatcher || !$this->gatewayConfig) {
+            return;
+        }
+
+        $connection = new OpenSwooleWebSocketConnection($this, $connectionId);
+        $this->dispatcher->dispatchDisconnection($this->gatewayConfig, $connection);
     }
 }
