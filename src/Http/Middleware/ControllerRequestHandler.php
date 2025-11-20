@@ -1,0 +1,37 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Hyperdrive\Http\Middleware;
+
+use Hyperdrive\Container\Container;
+use Hyperdrive\Http\ControllerDispatcher;
+use Hyperdrive\Http\Request;
+use Hyperdrive\Http\Response;
+use Hyperdrive\Routing\RouteDefinition;
+
+class ControllerRequestHandler implements RequestHandlerInterface
+{
+    public function __construct(
+        private Container $container,
+        private ControllerDispatcher $dispatcher,
+        private RouteDefinition $route
+    ) {}
+
+    public function handle(Request $request): Response
+    {
+        // This is the final step - dispatch to the controller
+        $result = $this->dispatcher->dispatch($this->route, $request);
+
+        // Convert controller return value to response
+        if ($result instanceof Response) {
+            return $result;
+        }
+
+        if (is_array($result) || is_object($result)) {
+            return new \Hyperdrive\Http\JsonResponse((array) $result);
+        }
+
+        return new Response((string) $result);
+    }
+}

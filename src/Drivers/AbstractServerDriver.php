@@ -8,6 +8,7 @@ use Hyperdrive\Config\Config;
 use Hyperdrive\Container\Container;
 use Hyperdrive\Http\ControllerDispatcher;
 use Hyperdrive\Http\JsonResponse;
+use Hyperdrive\Http\Middleware\ControllerRequestHandler;
 use Hyperdrive\Http\Request;
 use Hyperdrive\Http\Response;
 use Hyperdrive\Routing\Router;
@@ -128,11 +129,38 @@ abstract class AbstractServerDriver extends AbstractDriver
         }
 
         try {
-            $result = $this->dispatcher->dispatch($route, $request);
-            return $this->convertToResponse($result);
+            // Create middleware pipeline for this request
+            $finalHandler = new ControllerRequestHandler($this->container, $this->dispatcher, $route);
+            $pipeline = new MiddlewarePipeline($finalHandler);
+
+            // Add global middleware
+            $this->pipeGlobalMiddleware($pipeline);
+
+            // Add route-specific middleware
+            $this->pipeRouteMiddleware($pipeline, $route);
+
+            // Execute the pipeline
+            return $pipeline->handle($request);
         } catch (\Throwable $e) {
             return new Response('Server Error: ' . $e->getMessage(), 500);
         }
+    }
+
+    private function pipeGlobalMiddleware(MiddlewarePipeline $pipeline): void
+    {
+        // Add global middleware from config
+        $globalMiddleware = \Hyperdrive\Config\Config::get('middleware.global', []);
+
+        foreach ($globalMiddleware as $middlewareClass) {
+            $middleware = $this->container->get($middlewareClass);
+            $pipeline->pipe($middleware);
+        }
+    }
+
+    private function pipeRouteMiddleware(MiddlewarePipeline $pipeline, RouteDefinition $route): void
+    {
+        // TODO: Add route/controller-specific middleware from attributes
+        // This will be implemented when we add middleware attributes
     }
 
     private function convertToResponse(mixed $result): Response

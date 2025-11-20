@@ -6,8 +6,9 @@ namespace Hyperdrive\Config;
 
 class Config
 {
-    private static ?self $instance = null;
     private array $config = [];
+    private static ?self $instance = null;
+    private bool $loaded = false;
 
     private function __construct()
     {
@@ -18,9 +19,61 @@ class Config
     {
         if (self::$instance === null) {
             self::$instance = new self();
+            self::$instance->loadConfig();
         }
 
         return self::$instance;
+    }
+
+    private function loadConfig(): void
+    {
+        if ($this->loaded) {
+            return;
+        }
+
+        // 1. Load framework defaults first
+        $frameworkConfigPath = __DIR__ . '/../../config';
+        if (is_dir($frameworkConfigPath)) {
+            $this->loadConfigFromDirectory($frameworkConfigPath);
+        }
+
+        // 2. Load project overrides (if they exist)
+        $projectConfigPath = getcwd() . '/config';
+        if (is_dir($projectConfigPath)) {
+            $this->loadConfigFromDirectory($projectConfigPath);
+        }
+
+        $this->loaded = true;
+    }
+
+    private function loadConfigFromDirectory(string $configDir): void
+    {
+        $files = glob($configDir . '/*.php');
+
+        foreach ($files as $file) {
+            $filename = pathinfo($file, PATHINFO_FILENAME);
+            $config = require $file;
+
+            if (is_array($config)) {
+                // Merge with existing config (project overrides framework)
+                $existing = $this->getValue($filename, []);
+                $merged = $this->mergeConfig($existing, $config);
+                $this->setValue($filename, $merged);
+            }
+        }
+    }
+
+    private function mergeConfig(array $existing, array $new): array
+    {
+        foreach ($new as $key => $value) {
+            if (is_array($value) && isset($existing[$key]) && is_array($existing[$key])) {
+                $existing[$key] = $this->mergeConfig($existing[$key], $value);
+            } else {
+                $existing[$key] = $value;
+            }
+        }
+
+        return $existing;
     }
 
     public static function clear(): void
