@@ -214,4 +214,31 @@ class ArchitectureTest extends TestCase
         $reflection = new \ReflectionClass(\Hyperdrive\Application\Hyperdrive::class);
         $this->assertTrue($reflection->isFinal());
     }
+
+    public function test_middleware_interface_has_correct_method(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Http\Middleware\MiddlewareInterface::class);
+        $methods = $reflection->getMethods();
+
+        $this->assertCount(1, $methods);
+        $this->assertEquals('handle', $methods[0]->getName());
+
+        $parameters = $methods[0]->getParameters();
+        $this->assertCount(2, $parameters);
+        $this->assertEquals('request', $parameters[0]->getName());
+        $this->assertEquals('handler', $parameters[1]->getName());
+    }
+
+    public function test_request_handler_interface_has_correct_method(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Http\Middleware\RequestHandlerInterface::class);
+        $methods = $reflection->getMethods();
+
+        $this->assertCount(1, $methods);
+        $this->assertEquals('handle', $methods[0]->getName());
+
+        $parameters = $methods[0]->getParameters();
+        $this->assertCount(1, $parameters);
+        $this->assertEquals('request', $parameters[0]->getName());
+    }
 }
