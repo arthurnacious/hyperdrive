@@ -63,11 +63,6 @@ class ControllerDispatcher
             // 1. Try route parameters first (/{id} → $id)
             $routeParams = $route->extractParameters($request->getPath());
 
-            // Debug
-            echo "DEBUG: Route path: '{$route->getPath()}', Request path: '{$request->getPath()}'\n";
-            echo "DEBUG: Route params: " . json_encode($routeParams) . "\n";
-            echo "DEBUG: Looking for parameter: '{$parameter->getName()}'\n";
-
             if (isset($routeParams[$parameter->getName()])) {
                 return $this->convertRouteParameter($routeParams[$parameter->getName()], $type->getName());
             }

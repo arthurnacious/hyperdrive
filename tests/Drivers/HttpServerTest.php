@@ -39,13 +39,13 @@ class HttpServerTest extends TestCase
             ]
         );
 
-        // Debug the router directly
-        $foundRoute = $router->findRoute('GET', '/hello');
+        // // Debug the router directly
+        // $foundRoute = $router->findRoute('GET', '/hello');
 
         $response = $driver->handleRequest($request);
 
-        echo "Response status: {$response->getStatusCode()}\n";
-        echo "Response content: {$response->getContent()}\n";
+        // echo "Response status: {$response->getStatusCode()}\n";
+        // echo "Response content: {$response->getContent()}\n";
 
         $this->assertEquals(200, $response->getStatusCode());
         $this->assertStringContainsString('Roadstar: Handled GET /hello', $response->getContent());

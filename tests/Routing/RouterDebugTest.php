@@ -40,19 +40,19 @@ class RouterDebugTest extends TestCase
         $routes = $router->getRegisteredRoutes();
 
         echo "Registered routes:\n";
-        foreach ($routes as $route) {
-            echo " - {$route->getMethod()} {$route->getPath()} -> {$route->getControllerClass()}::{$route->getMethodName()}\n";
-        }
+        // foreach ($routes as $route) {
+        //     echo " - {$route->getMethod()} {$route->getPath()} -> {$route->getControllerClass()}::{$route->getMethodName()}\n";
+        // }
 
         // Test finding the routes
         $indexRoute = $router->findRoute('GET', '/');
         $customRoute = $router->findRoute('GET', '/custom');
         $createRoute = $router->findRoute('POST', '/create');
 
-        echo "\nFound routes:\n";
-        echo "GET / -> " . ($indexRoute ? $indexRoute->getMethodName() : 'NULL') . "\n";
-        echo "GET /custom -> " . ($customRoute ? $customRoute->getMethodName() : 'NULL') . "\n";
-        echo "POST /create -> " . ($createRoute ? $createRoute->getMethodName() : 'NULL') . "\n";
+        // echo "\nFound routes:\n";
+        // echo "GET / -> " . ($indexRoute ? $indexRoute->getMethodName() : 'NULL') . "\n";
+        // echo "GET /custom -> " . ($customRoute ? $customRoute->getMethodName() : 'NULL') . "\n";
+        // echo "POST /create -> " . ($createRoute ? $createRoute->getMethodName() : 'NULL') . "\n";
 
         $this->assertNotNull($indexRoute);
         $this->assertNotNull($customRoute);

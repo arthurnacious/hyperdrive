@@ -92,6 +92,7 @@ class Router
 
         if ($httpMethod !== null) {
             $fullPath = PathBuilder::build($prefix, $path ?: '');
+
             $this->routes[] = new RouteDefinition($httpMethod, $fullPath, $controllerClass, $method->getName());
         }
     }

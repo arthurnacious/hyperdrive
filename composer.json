@@ -13,7 +13,8 @@
     "require-dev": {
         "pestphp/pest": "^2.0",
         "pestphp/pest-plugin-arch": "^2.0",
-        "openswoole/ide-helper": "~22.0.1"
+        "openswoole/ide-helper": "~22.0.1",
+        "swoole/ide-helper": "@dev"
     },
     "autoload": {
         "psr-4": {
