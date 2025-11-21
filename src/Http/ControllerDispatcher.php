@@ -9,6 +9,9 @@ use Hyperdrive\Routing\RouteDefinition;
 
 class ControllerDispatcher
 {
+    private array $controllerPool = [];
+    private array $parameterCache = []; // Cache reflection results
+
     public function __construct(
         private Container $container
     ) {}
@@ -16,16 +19,16 @@ class ControllerDispatcher
     public function dispatch(RouteDefinition $route, Request $request): mixed
     {
         $controllerClass = $route->getControllerClass();
-        $methodName = $route->getMethodName();
 
-        // Get controller instance from DI container
-        $controller = $this->container->get($controllerClass);
+        // Reuse controller instance (stateless = safe to reuse)
+        if (!isset($this->controllerPool[$controllerClass])) {
+            $this->controllerPool[$controllerClass] = $this->container->get($controllerClass);
+        }
 
-        // Resolve method parameters
-        $parameters = $this->resolveMethodParameters($controller, $methodName, $route, $request);
+        $controller = $this->controllerPool[$controllerClass];
+        $parameters = $this->resolveMethodParameters($controller, $route->getMethodName(), $route, $request);
 
-        // Call the controller method
-        return $controller->$methodName(...$parameters);
+        return $controller->{$route->getMethodName()}(...$parameters);
     }
 
     private function resolveMethodParameters(
@@ -34,10 +37,16 @@ class ControllerDispatcher
         RouteDefinition $route,
         Request $request
     ): array {
-        $reflection = new \ReflectionMethod($controller, $methodName);
-        $parameters = [];
+        $cacheKey = get_class($controller) . '::' . $methodName;
 
-        foreach ($reflection->getParameters() as $parameter) {
+        // Use cached reflection data (avoid reflection on every request)
+        if (!isset($this->parameterCache[$cacheKey])) {
+            $reflection = new \ReflectionMethod($controller, $methodName);
+            $this->parameterCache[$cacheKey] = $reflection->getParameters();
+        }
+
+        $parameters = [];
+        foreach ($this->parameterCache[$cacheKey] as $parameter) {
             $parameters[] = $this->resolveParameter($parameter, $route, $request);
         }
 
@@ -115,5 +124,16 @@ class ControllerDispatcher
             'bool' => filter_var($value, FILTER_VALIDATE_BOOLEAN),
             default => $value
         };
+    }
+
+    /**
+     * Get cache stats for debugging
+     */
+    public function getCacheStats(): array
+    {
+        return [
+            'controllers_cached' => count($this->controllerPool),
+            'methods_cached' => count($this->parameterCache)
+        ];
     }
 }
