@@ -10,24 +10,27 @@ use Hyperdrive\Attributes\Http\Verbs\Get;
 use Hyperdrive\Attributes\Http\Verbs\Patch;
 use Hyperdrive\Attributes\Http\Verbs\Post;
 use Hyperdrive\Attributes\Http\Verbs\Put;
+use Hyperdrive\Support\PathBuilder;
 
 class Router
 {
     /** @var RouteDefinition[] */
     private array $routes = [];
 
-    public function registerController(string $controllerClass): void
+    public function registerController(string $controllerClass, string $prefix = ''): void
     {
-
         $reflection = new \ReflectionClass($controllerClass);
 
-        // Get class-level Route attribute for prefix
+        // Get class-level Route attribute for additional prefix
         $classRoute = $this->getClassRoute($reflection);
-        $prefix = $classRoute?->prefix ?? '';
+        $controllerPrefix = $classRoute?->prefix ?? '';
+
+        // Combine module prefix + controller prefix
+        $fullPrefix = PathBuilder::build($prefix, $controllerPrefix);
 
         foreach ($reflection->getMethods() as $method) {
             if ($method->isPublic() && !$method->isConstructor()) {
-                $this->registerRoute($controllerClass, $method, $prefix);
+                $this->registerRoute($controllerClass, $method, $fullPrefix);
             }
         }
     }
@@ -88,15 +91,9 @@ class Router
         }
 
         if ($httpMethod !== null) {
-            $fullPath = $this->buildPath($prefix, $path ?: '');
-            // Store the pattern (with {param} placeholders), not a concrete path
+            $fullPath = PathBuilder::build($prefix, $path ?: '');
             $this->routes[] = new RouteDefinition($httpMethod, $fullPath, $controllerClass, $method->getName());
         }
-    }
-
-    private function buildPath(string $prefix, string $path): string
-    {
-        return \Hyperdrive\Support\PathBuilder::build($prefix, $path);
     }
 
     /**

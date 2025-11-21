@@ -5,32 +5,50 @@ declare(strict_types=1);
 namespace Hyperdrive\Application;
 
 use Hyperdrive\Container\Container;
+use Hyperdrive\Routing\Router;
+use Hyperdrive\Support\PathBuilder;
 
 class ModuleRegistry
 {
     private array $modules = [];
     private ?Container $container = null;
+    private ?Router $router = null;
 
     public function setContainer(Container $container): void
     {
         $this->container = $container;
     }
 
-    public function register(string $moduleClass): void
+    public function setRouter(Router $router): void
+    {
+        $this->router = $router;
+    }
+
+    public function register(string $moduleClass, string $parentPrefix = ''): void
     {
         if ($this->has($moduleClass)) {
             return;
         }
 
         $metadata = $this->resolveModuleMetadata($moduleClass);
-        $this->modules[$moduleClass] = $metadata;
 
-        // Register all imported modules recursively FIRST
+        // Apply parent prefix to this module's prefix
+        $fullPrefix = PathBuilder::build($parentPrefix, $metadata['prefix']);
+
+        $this->modules[$moduleClass] = array_merge($metadata, [
+            'fullPrefix' => $fullPrefix
+        ]);
+
+        // Register imported modules with the accumulated prefix FIRST
         foreach ($metadata['imports'] as $importedModule) {
-            $this->register($importedModule);
+            $this->register($importedModule, $fullPrefix);
         }
 
-        // THEN register bindings and injectables with the container
+        // THEN register controllers and bindings
+        if ($this->router) {
+            $this->registerModuleControllers($moduleClass, $fullPrefix);
+        }
+
         if ($this->container) {
             $this->registerModuleBindings($metadata);
         }
@@ -61,6 +79,21 @@ class ModuleRegistry
         return $this->modules[$moduleClass]['imports'] ?? [];
     }
 
+    public function getGateways(string $moduleClass): array
+    {
+        return $this->modules[$moduleClass]['gateways'] ?? [];
+    }
+
+    public function getStatic(string $moduleClass): array
+    {
+        return $this->modules[$moduleClass]['static'] ?? [];
+    }
+
+    public function getPrefix(string $moduleClass): string
+    {
+        return $this->modules[$moduleClass]['fullPrefix'] ?? '';
+    }
+
     private function resolveModuleMetadata(string $moduleClass): array
     {
         $reflection = new \ReflectionClass($moduleClass);
@@ -72,7 +105,9 @@ class ModuleRegistry
                 'controllers' => [],
                 'injectables' => [],
                 'exports' => [],
-                'gateways' => []
+                'gateways' => [],
+                'static' => [],
+                'prefix' => ''
             ];
         }
 
@@ -84,7 +119,19 @@ class ModuleRegistry
             'injectables' => $moduleAttribute->injectables,
             'exports' => $moduleAttribute->exports,
             'gateways' => $moduleAttribute->gateways,
+            'static' => $moduleAttribute->static,
+            'prefix' => $moduleAttribute->prefix,
         ];
+    }
+
+    private function registerModuleControllers(string $moduleClass, string $prefix): void
+    {
+        $controllers = $this->getControllers($moduleClass);
+
+        foreach ($controllers as $controllerClass) {
+            // Register controller with the accumulated prefix
+            $this->router->registerController($controllerClass, $prefix);
+        }
     }
 
     private function registerModuleBindings(array $metadata): void
@@ -104,10 +151,5 @@ class ModuleRegistry
                 $this->container->get($value); // This will auto-register it
             }
         }
-    }
-
-    public function getGateways(string $moduleClass): array
-    {
-        return $this->modules[$moduleClass]['gateways'] ?? [];
     }
 }
