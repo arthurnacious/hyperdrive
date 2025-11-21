@@ -137,8 +137,6 @@ class OpenSwooleDriver extends AbstractServerDriver
             // Store the server for this gateway path
             $this->webSocketServers[$gateway['path']] = $server;
 
-            echo "🔌 WebSocket gateway registered: ws://{$websocketHost}:{$websocketPort}{$gateway['path']}\n";
-
             // Start the WebSocket server
             $server->start($websocketPort, $websocketHost);
         }
@@ -163,8 +161,6 @@ class OpenSwooleDriver extends AbstractServerDriver
             $server = new OpenSwooleWebSocketServer($gateway['path'], $gateway);
             $server->setDispatcher($this->webSocketDispatcher);
             $this->webSocketServers[$gateway['path']] = $server;
-
-            echo "🔌 WebSocket gateway started: {$gateway['path']}\n";
         }
     }
 
@@ -195,25 +191,49 @@ class OpenSwooleDriver extends AbstractServerDriver
         \OpenSwoole\Http\Request $swooleRequest,
         \OpenSwoole\Http\Response $swooleResponse
     ): void {
-        // Convert Swoole request to framework request
-        $request = $this->createRequestFromSwoole($swooleRequest);
 
-        // Handle the request using our framework (inherited from AbstractServerDriver)
-        $response = $this->handleFrameworkRequest($request);
+        if ($this->router) {
+            $route = $this->router->findRoute(
+                $swooleRequest->server['request_method'],
+                $swooleRequest->server['request_uri']
+            );
 
-        // Convert framework response to Swoole response
-        $this->sendSwooleResponse($response, $swooleResponse);
+            if ($route) {
+                // Convert Swoole request to framework request
+                $request = $this->createRequestFromSwoole($swooleRequest);
+
+                $response = $this->handleFrameworkRequest($request);
+
+                // Convert framework response to Swoole response
+                $this->sendSwooleResponse($response, $swooleResponse);
+                return;
+            }
+        }
+
+        $swooleResponse->status(404);
+        $swooleResponse->end('Not Found');
     }
 
     private function createRequestFromSwoole(\OpenSwoole\Http\Request $swooleRequest): Request
     {
+        // Convert Swoole server keys to standard PHP server keys
+        $server = [];
+        foreach ($swooleRequest->server as $key => $value) {
+            // Convert to uppercase for compatibility with Request::getPath()
+            $server[strtoupper($key)] = $value;
+        }
+
+        // Ensure both uppercase and lowercase versions exist for compatibility
+        $server['REQUEST_URI'] = $swooleRequest->server['request_uri'] ?? '/';
+        $server['REQUEST_METHOD'] = $swooleRequest->server['request_method'] ?? 'GET';
+
         return new Request(
             query: $swooleRequest->get ?? [],
             request: $swooleRequest->post ?? [],
             attributes: [],
             cookies: $swooleRequest->cookie ?? [],
             files: $swooleRequest->files ?? [],
-            server: $swooleRequest->server ?? [],
+            server: $server,
             content: $swooleRequest->rawContent() ?: null
         );
     }

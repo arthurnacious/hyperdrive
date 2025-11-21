@@ -31,12 +31,19 @@ class Request
 
     public function getMethod(): string
     {
-        return $this->server['REQUEST_METHOD'] ?? 'GET';
+        return $this->server['REQUEST_METHOD'] ?? $this->server['request_method'] ?? 'GET';
     }
 
     public function getPath(): string
     {
-        return parse_url($this->server['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
+        // Handle both uppercase (standard PHP) and lowercase (Swoole) keys
+        $requestUri = $this->server['REQUEST_URI'] ?? $this->server['request_uri'] ?? '/';
+
+        // Parse the path from the URI (handle query strings, etc.)
+        $path = parse_url($requestUri, PHP_URL_PATH) ?? '/';
+
+        // Ensure the path is never empty
+        return $path === '' ? '/' : $path;
     }
 
     public function getContentType(): ?string

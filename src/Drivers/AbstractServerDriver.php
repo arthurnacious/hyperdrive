@@ -8,6 +8,7 @@ use Hyperdrive\Config\Config;
 use Hyperdrive\Container\Container;
 use Hyperdrive\Http\ControllerDispatcher;
 use Hyperdrive\Http\Middleware\ControllerRequestHandler;
+use Hyperdrive\Http\Middleware\MiddlewareInterface;
 use Hyperdrive\Http\Middleware\MiddlewarePipeline;
 use Hyperdrive\Http\Request;
 use Hyperdrive\Http\Response;
@@ -15,12 +16,14 @@ use Hyperdrive\Routing\Router;
 
 abstract class AbstractServerDriver extends AbstractDriver
 {
-
     protected string $protocol = 'http';
     protected array $serverOptions = [];
     protected ?Router $router = null;
     protected ?Container $container = null;
     protected ?ControllerDispatcher $dispatcher = null;
+
+    /** @var MiddlewareInterface[]|null */
+    private ?array $globalMiddlewareInstances = null; // 🆕 Cache middleware instances
 
     public function boot(): void
     {
@@ -37,6 +40,9 @@ abstract class AbstractServerDriver extends AbstractDriver
         }
 
         $this->dispatcher = new ControllerDispatcher($this->container);
+
+        // 🆕 Pre-initialize global middleware instances
+        $this->initializeGlobalMiddleware();
     }
 
     public function getServerHost(): string
@@ -133,7 +139,7 @@ abstract class AbstractServerDriver extends AbstractDriver
             $finalHandler = new ControllerRequestHandler($this->container, $this->dispatcher, $route);
             $pipeline = new MiddlewarePipeline($finalHandler);
 
-            // Add global middleware
+            // 🆕 Add pre-initialized global middleware (FASTER!)
             $this->pipeGlobalMiddleware($pipeline);
 
             // Execute the pipeline
@@ -143,16 +149,33 @@ abstract class AbstractServerDriver extends AbstractDriver
         }
     }
 
-    private function pipeGlobalMiddleware(MiddlewarePipeline $pipeline): void
+    /**
+     * 🆕 Pre-initialize global middleware instances during boot
+     * This avoids config lookups and DI container calls on every request
+     */
+    private function initializeGlobalMiddleware(): void
     {
-        // Add global middleware from config
-        $globalMiddleware = \Hyperdrive\Config\Config::get('middleware.global', []);
+        $globalMiddleware = Config::get('middleware.global', []);
+        $this->globalMiddlewareInstances = [];
 
         foreach ($globalMiddleware as $middlewareClass) {
             if (class_exists($middlewareClass)) {
-                $middleware = $this->container->get($middlewareClass);
-                $pipeline->pipe($middleware);
+                $this->globalMiddlewareInstances[] = $this->container->get($middlewareClass);
             }
+        }
+    }
+
+    /**
+     * 🆕 Use pre-initialized middleware instances instead of creating new ones
+     */
+    private function pipeGlobalMiddleware(MiddlewarePipeline $pipeline): void
+    {
+        if ($this->globalMiddlewareInstances === null) {
+            $this->initializeGlobalMiddleware();
+        }
+
+        foreach ($this->globalMiddlewareInstances as $middleware) {
+            $pipeline->pipe($middleware);
         }
     }
 }

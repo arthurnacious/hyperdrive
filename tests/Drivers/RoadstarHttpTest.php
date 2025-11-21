@@ -40,9 +40,6 @@ class RoadstarHttpTest extends TestCase
             ]
         );
 
-        // Debug the router directly
-        $foundRoute = $router->findRoute('GET', '/users');
-
         $response = $driver->handleRequest($request);
 
         $this->assertEquals(200, $response->getStatusCode());

@@ -26,6 +26,7 @@ class ModuleRegistry
 
     public function register(string $moduleClass, string $parentPrefix = ''): void
     {
+
         if ($this->has($moduleClass)) {
             return;
         }
@@ -94,6 +95,11 @@ class ModuleRegistry
         return $this->modules[$moduleClass]['fullPrefix'] ?? '';
     }
 
+    public function getRegisteredModules(): array
+    {
+        return array_keys($this->modules);
+    }
+
     private function resolveModuleMetadata(string $moduleClass): array
     {
         $reflection = new \ReflectionClass($moduleClass);
@@ -129,7 +135,6 @@ class ModuleRegistry
         $controllers = $this->getControllers($moduleClass);
 
         foreach ($controllers as $controllerClass) {
-            // Register controller with the accumulated prefix
             if (class_exists($controllerClass)) {
                 $this->router->registerController($controllerClass, $prefix);
             }
