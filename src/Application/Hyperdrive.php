@@ -70,14 +70,24 @@ final class Hyperdrive
         // Boot the driver
         $this->driver->boot();
 
+        // 🆕 Environment-aware logging
+        if ($this->environment !== 'production') {
+            $this->logBootInfo();
+        }
+    }
+
+    // 🆕 Separate method for development logging
+    private function logBootInfo(): void
+    {
         echo "🚀 Hyperdrive booted successfully!\n";
         echo "   Environment: {$this->environment}\n";
         echo "   URL: {$this->url}\n";
         echo "   Driver: " . get_class($this->driver) . "\n";
 
-        // Display registered routes
+        // Display registered routes (development only)
         $this->displayRoutes();
     }
+
 
     public function listen(int $port = 3000, string $host = '0.0.0.0'): void
     {
