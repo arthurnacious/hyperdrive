@@ -63,6 +63,17 @@ final class Hyperdrive
         // Initialize the module tree
         $this->initializeModules();
 
+        // 🆕 Build fast route map after all routes are registered
+        if (method_exists($this->router, 'buildRouteMap')) {
+            $this->router->buildRouteMap();
+
+            // 🆕 Debug: show route map stats in development
+            if ($this->environment !== 'production') {
+                $stats = $this->router->getRouteMapStats();
+                echo "   Route Map: {$stats['static_routes']} static, {$stats['parameterized_routes']} parameterized\n";
+            }
+        }
+
         // Set up the driver with dependencies
         $this->driver->setContainer($this->container);
         $this->driver->setRouter($this->router);
