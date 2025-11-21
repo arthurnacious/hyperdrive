@@ -134,7 +134,6 @@ class SecureController {}
 ## Roadmap
 
 -   CLI tool (`php please`)
--   Database layer with repositories
 -   Domain event system
 -   Task scheduling
 -   API versioning
@@ -145,7 +144,6 @@ class SecureController {}
 #### Hyperdrive is open source and welcomes contributions! We're particularly interested in:
 
 - Performance optimizations
-- Additional database drivers
 - Middleware implementations
 - Testing utilities
 - Documentation improvements
