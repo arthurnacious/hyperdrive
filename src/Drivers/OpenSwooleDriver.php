@@ -69,7 +69,6 @@ class OpenSwooleDriver extends AbstractServerDriver
                 return $this->handleWebSocketHandshake($request, $response);
             });
 
-            // 🆕 REMOVE TYPE HINTS to avoid conflicts
             $this->server->on('message', function ($server, $frame) {
                 $this->handleWebSocketMessage($server, $frame);
             });

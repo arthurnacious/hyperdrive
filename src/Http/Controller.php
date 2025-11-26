@@ -66,7 +66,7 @@ abstract class Controller
         return new JsonResponse(['error' => $message], $status, $headers);
     }
 
-    protected function json(array $data, int $status = 200, array $headers = []): JsonResponse
+    protected function json(mixed $data, int $status = 200, array $headers = []): JsonResponse
     {
         return new JsonResponse($data, $status, $headers);
     }
