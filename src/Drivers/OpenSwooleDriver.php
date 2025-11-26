@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hyperdrive\Drivers;
 
+use Hyperdrive\Http\Middleware\MiddlewarePipeline;
 use Hyperdrive\Http\Request;
 use Hyperdrive\Http\Response;
 use Hyperdrive\WebSocket\OpenSwooleWebSocketServer;
@@ -74,6 +75,74 @@ class OpenSwooleDriver extends AbstractServerDriver
         $this->server->start();
     }
 
+    private function handleSwooleRequest(
+        \OpenSwoole\Http\Request $swooleRequest,
+        \OpenSwoole\Http\Response $swooleResponse
+    ): void {
+        try {
+            if (!$this->router) {
+                throw new \RuntimeException('Router not initialized');
+            }
+
+            $request = Request::createFromSwoole($swooleRequest);
+
+            $route = $this->router->findRoute(
+                $request->getMethod(),
+                $request->getPath()
+            );
+
+            if (!$route) {
+                $swooleResponse->status(404);
+                $swooleResponse->end('Not Found');
+                return;
+            }
+
+            $finalHandler = new \Hyperdrive\Http\Middleware\ControllerRequestHandler(
+                $this->container,
+                $this->dispatcher,
+                $route
+            );
+            $pipeline = new \Hyperdrive\Http\Middleware\MiddlewarePipeline($finalHandler);
+
+            $this->pipeGlobalMiddleware($pipeline);
+
+            $response = $pipeline->handle($request);
+
+            $this->sendSwooleResponse($response, $swooleResponse);
+        } catch (\Throwable $e) {
+
+            $swooleResponse->status(500);
+            $swooleResponse->end('Server Error: ' . ($this->environment !== 'production' ? $e->getMessage() : 'Internal error'));
+        }
+    }
+
+    protected function pipeGlobalMiddleware(MiddlewarePipeline $pipeline): void
+    {
+        // For now, just log that we're skipping middleware
+        if ($this->environment !== 'production') {
+            echo "📝 Note: Global middleware is not yet implemented\n";
+        }
+
+        // TODO: Implement actual middleware loading from config
+        // $globalMiddleware = Config::get('middleware.global', []);
+        // foreach ($globalMiddleware as $middlewareClass) {
+        //     $middleware = $this->container->get($middlewareClass);
+        //     $pipeline->pipe($middleware);
+        // }
+    }
+
+    private function sendSwooleResponse(Response $response, \OpenSwoole\Http\Response $swooleResponse): void
+    {
+        $swooleResponse->status($response->getStatusCode());
+
+        foreach ($response->getHeaders() as $name => $value) {
+            $swooleResponse->header($name, $value);
+        }
+
+        $swooleResponse->end($response->getContent());
+    }
+
+    // ... rest of your existing WebSocket methods remain the same
     private function handleWebSocketHandshake(
         \OpenSwoole\Http\Request $request,
         \OpenSwoole\Http\Response $response
@@ -116,7 +185,6 @@ class OpenSwooleDriver extends AbstractServerDriver
         \OpenSwoole\WebSocket\Frame $frame
     ): void {
         // This is handled by the individual WebSocket servers
-        // The message event is delegated to the appropriate server based on the connection
     }
 
     private function handleWebSocketClose(OpenSwooleServer $server, int $fd): void
@@ -185,67 +253,5 @@ class OpenSwooleDriver extends AbstractServerDriver
         // This method is for internal framework use
         // Actual HTTP requests are handled via handleSwooleRequest
         return new Response('OpenSwoole: Request handled internally', 200);
-    }
-
-    private function handleSwooleRequest(
-        \OpenSwoole\Http\Request $swooleRequest,
-        \OpenSwoole\Http\Response $swooleResponse
-    ): void {
-
-        if ($this->router) {
-            $route = $this->router->findRoute(
-                $swooleRequest->server['request_method'],
-                $swooleRequest->server['request_uri']
-            );
-
-            if ($route) {
-                // Convert Swoole request to framework request
-                $request = $this->createRequestFromSwoole($swooleRequest);
-
-                $response = $this->handleFrameworkRequest($request);
-
-                // Convert framework response to Swoole response
-                $this->sendSwooleResponse($response, $swooleResponse);
-                return;
-            }
-        }
-
-        $swooleResponse->status(404);
-        $swooleResponse->end('Not Found');
-    }
-
-    private function createRequestFromSwoole(\OpenSwoole\Http\Request $swooleRequest): Request
-    {
-        // Convert Swoole server keys to standard PHP server keys
-        $server = [];
-        foreach ($swooleRequest->server as $key => $value) {
-            // Convert to uppercase for compatibility with Request::getPath()
-            $server[strtoupper($key)] = $value;
-        }
-
-        // Ensure both uppercase and lowercase versions exist for compatibility
-        $server['REQUEST_URI'] = $swooleRequest->server['request_uri'] ?? '/';
-        $server['REQUEST_METHOD'] = $swooleRequest->server['request_method'] ?? 'GET';
-
-        return new Request(
-            query: $swooleRequest->get ?? [],
-            request: $swooleRequest->post ?? [],
-            attributes: [],
-            cookies: $swooleRequest->cookie ?? [],
-            files: $swooleRequest->files ?? [],
-            server: $server,
-            content: $swooleRequest->rawContent() ?: null
-        );
-    }
-
-    private function sendSwooleResponse(Response $response, \OpenSwoole\Http\Response $swooleResponse): void
-    {
-        $swooleResponse->status($response->getStatusCode());
-
-        foreach ($response->getHeaders() as $name => $value) {
-            $swooleResponse->header($name, $value);
-        }
-
-        $swooleResponse->end($response->getContent());
     }
 }

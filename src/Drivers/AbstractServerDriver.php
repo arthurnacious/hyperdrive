@@ -18,18 +18,16 @@ abstract class AbstractServerDriver extends AbstractDriver
 {
     protected string $protocol = 'http';
     protected array $serverOptions = [];
-    protected ?Router $router = null;
-    protected ?Container $container = null;
     protected ?ControllerDispatcher $dispatcher = null;
 
     /** @var MiddlewareInterface[]|null */
-    private ?array $globalMiddlewareInstances = null; // 🆕 Cache middleware instances
+    private ?array $globalMiddlewareInstances = null;
 
     public function boot(): void
     {
         $this->running = true;
 
-        // Only initialize router if not already set
+        // Only initialize router if not already set via setRouter()
         if (!$this->router) {
             $this->router = new Router();
         }

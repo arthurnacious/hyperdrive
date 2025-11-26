@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hyperdrive\Tests\Http;
 
 use Hyperdrive\Http\Request;
+use Hyperdrive\Http\UploadedFile;
 use PHPUnit\Framework\TestCase;
 
 class RequestTest extends TestCase
@@ -57,5 +58,112 @@ class RequestTest extends TestCase
         );
 
         $this->assertEquals($formData, $request->getBody());
+    }
+
+    public function test_it_handles_file_uploads(): void
+    {
+        $files = [
+            'avatar' => [
+                'name' => 'test.jpg',
+                'type' => 'image/jpeg',
+                'tmp_name' => '/tmp/php123',
+                'error' => UPLOAD_ERR_OK,
+                'size' => 1024
+            ]
+        ];
+
+        $request = new Request(files: $files);
+
+        $uploadedFiles = $request->file('avatar');
+        $this->assertIsArray($uploadedFiles);
+        $this->assertCount(1, $uploadedFiles);
+        $this->assertInstanceOf(UploadedFile::class, $uploadedFiles[0]);
+        $this->assertEquals('test.jpg', $uploadedFiles[0]->getClientOriginalName());
+    }
+
+    public function test_it_handles_multiple_file_uploads(): void
+    {
+        $files = [
+            'documents' => [
+                'name' => ['doc1.pdf', 'doc2.pdf'],
+                'type' => ['application/pdf', 'application/pdf'],
+                'tmp_name' => ['/tmp/php123', '/tmp/php456'],
+                'error' => [UPLOAD_ERR_OK, UPLOAD_ERR_OK],
+                'size' => [1024, 2048]
+            ]
+        ];
+
+        $request = new Request(files: $files);
+
+        $uploadedFiles = $request->file('documents');
+        $this->assertIsArray($uploadedFiles);
+        $this->assertCount(2, $uploadedFiles);
+        $this->assertEquals('doc1.pdf', $uploadedFiles[0]->getClientOriginalName());
+        $this->assertEquals('doc2.pdf', $uploadedFiles[1]->getClientOriginalName());
+    }
+
+    public function test_it_returns_first_file(): void
+    {
+        $files = [
+            'avatar' => [
+                'name' => 'test.jpg',
+                'type' => 'image/jpeg',
+                'tmp_name' => '/tmp/php123',
+                'error' => UPLOAD_ERR_OK,
+                'size' => 1024
+            ]
+        ];
+
+        $request = new Request(files: $files);
+
+        $firstFile = $request->firstFile('avatar');
+        $this->assertInstanceOf(UploadedFile::class, $firstFile);
+        $this->assertEquals('test.jpg', $firstFile->getClientOriginalName());
+    }
+
+    public function test_it_checks_if_file_exists(): void
+    {
+        $files = [
+            'avatar' => [
+                'name' => 'test.jpg',
+                'type' => 'image/jpeg',
+                'tmp_name' => '/tmp/php123',
+                'error' => UPLOAD_ERR_OK,
+                'size' => 1024
+            ]
+        ];
+
+        $request = new Request(files: $files);
+
+        $this->assertTrue($request->hasFile('avatar'));
+        $this->assertFalse($request->hasFile('nonexistent'));
+    }
+
+    public function test_it_gets_all_files(): void
+    {
+        $files = [
+            'avatar' => [
+                'name' => 'test.jpg',
+                'type' => 'image/jpeg',
+                'tmp_name' => '/tmp/php123',
+                'error' => UPLOAD_ERR_OK,
+                'size' => 1024
+            ],
+            'documents' => [
+                'name' => ['doc1.pdf'],
+                'type' => ['application/pdf'],
+                'tmp_name' => ['/tmp/php456'],
+                'error' => [UPLOAD_ERR_OK],
+                'size' => [2048]
+            ]
+        ];
+
+        $request = new Request(files: $files);
+
+        $allFiles = $request->allFiles();
+        $this->assertArrayHasKey('avatar', $allFiles);
+        $this->assertArrayHasKey('documents', $allFiles);
+        $this->assertCount(1, $allFiles['avatar']);
+        $this->assertCount(1, $allFiles['documents']);
     }
 }

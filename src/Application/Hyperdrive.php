@@ -63,15 +63,9 @@ final class Hyperdrive
         // Initialize the module tree
         $this->initializeModules();
 
-        // 🆕 Build fast route map after all routes are registered
+        // Build route map if available
         if (method_exists($this->router, 'buildRouteMap')) {
             $this->router->buildRouteMap();
-
-            // 🆕 Debug: show route map stats in development
-            if ($this->environment !== 'production') {
-                $stats = $this->router->getRouteMapStats();
-                echo "   Route Map: {$stats['static_routes']} static, {$stats['parameterized_routes']} parameterized\n";
-            }
         }
 
         // Set up the driver with dependencies
@@ -81,22 +75,20 @@ final class Hyperdrive
         // Boot the driver
         $this->driver->boot();
 
-        // 🆕 Environment-aware logging
+        // Environment-aware logging
         if ($this->environment !== 'production') {
             $this->logBootInfo();
         }
     }
 
-    // 🆕 Separate method for development logging
     private function logBootInfo(): void
     {
-        echo "🚀 Hyperdrive booted successfully!\n";
-        echo "   Environment: {$this->environment}\n";
-        echo "   URL: {$this->url}\n";
-        echo "   Driver: " . get_class($this->driver) . "\n";
-
-        // Display registered routes (development only)
-        $this->displayRoutes();
+        if ($this->environment !== 'production') {
+            echo "🚀 Hyperdrive booted successfully!\n";
+            echo "   Environment: {$this->environment}\n";
+            echo "   URL: {$this->url}\n";
+            echo "   Driver: " . get_class($this->driver) . "\n";
+        }
     }
 
 
@@ -196,25 +188,8 @@ final class Hyperdrive
         // Register the root module and all its imports recursively
         $this->moduleRegistry->register($this->rootModule);
 
-        echo "📦 Modules initialized:\n";
-        foreach ($this->moduleRegistry->getRegisteredModules() as $moduleClass) {
-            $controllers = $this->moduleRegistry->getControllers($moduleClass);
-            $prefix = $this->moduleRegistry->getPrefix($moduleClass);
-            echo "   - {$moduleClass} (prefix: '{$prefix}', controllers: " . count($controllers) . ")\n";
-        }
-    }
-
-    private function displayRoutes(): void
-    {
-        $routes = $this->router->getRegisteredRoutes();
-        if (empty($routes)) {
-            echo "   No routes registered\n";
-            return;
-        }
-
-        echo "   Routes:\n";
-        foreach ($routes as $route) {
-            echo "     {$route->getMethod()} {$route->getPath()} → {$route->getControllerClass()}::{$route->getMethodName()}\n";
+        if (method_exists($this->router, 'buildRouteMap')) {
+            $this->router->buildRouteMap();
         }
     }
 }

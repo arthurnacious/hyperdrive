@@ -37,13 +37,6 @@ class RouterDebugTest extends TestCase
         $router = new Router();
         $router->registerController(DebugController::class);
 
-        $routes = $router->getRegisteredRoutes();
-
-        echo "Registered routes:\n";
-        // foreach ($routes as $route) {
-        //     echo " - {$route->getMethod()} {$route->getPath()} -> {$route->getControllerClass()}::{$route->getMethodName()}\n";
-        // }
-
         // Test finding the routes
         $indexRoute = $router->findRoute('GET', '/');
         $customRoute = $router->findRoute('GET', '/custom');
