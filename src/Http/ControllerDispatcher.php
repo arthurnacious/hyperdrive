@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hyperdrive\Http;
 
 use Hyperdrive\Container\Container;
+use Hyperdrive\Http\Dto\Validation\ValidationException;
 use Hyperdrive\Routing\RouteDefinition;
 
 class ControllerDispatcher
@@ -107,9 +108,17 @@ class ControllerDispatcher
             return $request;
         }
 
-        // 3. DTO objects (from request body)
+        // 3. DTO objects (from request body) - WITH VALIDATION EXCEPTION HANDLING
         if (is_subclass_of($typeName, Dto::class)) {
-            return new $typeName($request->getBody());
+            try {
+                return new $typeName($request->getBody());
+            } catch (ValidationException $e) {
+                // 🆕 Re-throw ValidationException so it becomes a 422 response
+                throw $e;
+            } catch (\Throwable $e) {
+                // Other DTO errors become 500
+                throw new \RuntimeException("DTO creation failed: " . $e->getMessage(), 0, $e);
+            }
         }
 
         // 4. DI container resolution

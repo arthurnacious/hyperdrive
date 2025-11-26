@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hyperdrive\Drivers;
 
+use Hyperdrive\Http\Dto\Validation\ValidationException;
 use Hyperdrive\Http\Middleware\MiddlewarePipeline;
 use Hyperdrive\Http\Request;
 use Hyperdrive\Http\Response;
@@ -21,9 +22,8 @@ class OpenSwooleDriver extends AbstractServerDriver
 
     public function boot(): void
     {
-        parent::boot(); // Calls parent boot for router/container initialization
+        parent::boot();
 
-        // Initialize WebSocket components
         $this->webSocketRegistry = new WebSocketRegistry();
         $this->webSocketDispatcher = new WebSocketGatewayDispatcher($this->container);
     }
@@ -33,13 +33,21 @@ class OpenSwooleDriver extends AbstractServerDriver
         $port = $port ?? $this->getServerPort();
         $host = $host ?? $this->getServerHost();
 
+        // Create server with configuration
         $this->server = new OpenSwooleServer($host, $port);
 
-        $this->server->on('start', function () use ($host, $port) {
-            $url = $this->getServerUrl($host, $port);
+        // Set configuration
+        $this->server->set([
+            'enable_coroutine' => true,
+            'open_http_protocol' => true,
+            'open_websocket_protocol' => $this->isWebSocketEnabled(),
+        ]);
+
+        // Register event handlers
+        $this->server->on('start', function (OpenSwooleServer $server) {
+            $url = $this->getServerUrl($server->host, $server->port);
             $this->logServerStart('OpenSwoole', $url);
 
-            // Start WebSocket servers if enabled
             if ($this->isWebSocketEnabled()) {
                 $this->startWebSocketServers();
             }
@@ -52,25 +60,24 @@ class OpenSwooleDriver extends AbstractServerDriver
             $this->handleSwooleRequest($swooleRequest, $swooleResponse);
         });
 
-        // WebSocket handshake and upgrade
-        $this->server->on('handshake', function (
-            \OpenSwoole\Http\Request $request,
-            \OpenSwoole\Http\Response $response
-        ) {
-            return $this->handleWebSocketHandshake($request, $response);
-        });
+        // Only register WebSocket events if WebSocket is enabled
+        if ($this->isWebSocketEnabled()) {
+            $this->server->on('handshake', function (
+                \OpenSwoole\Http\Request $request,
+                \OpenSwoole\Http\Response $response
+            ) {
+                return $this->handleWebSocketHandshake($request, $response);
+            });
 
-        // WebSocket frame handling
-        $this->server->on('message', function (
-            OpenSwooleWebSocketServer $server,
-            \OpenSwoole\WebSocket\Frame $frame
-        ) {
-            $this->handleWebSocketMessage($server, $frame);
-        });
+            // 🆕 REMOVE TYPE HINTS to avoid conflicts
+            $this->server->on('message', function ($server, $frame) {
+                $this->handleWebSocketMessage($server, $frame);
+            });
 
-        $this->server->on('close', function (OpenSwooleServer $server, int $fd) {
-            $this->handleWebSocketClose($server, $fd);
-        });
+            $this->server->on('close', function ($server, $fd) {
+                $this->handleWebSocketClose($server, $fd);
+            });
+        }
 
         $this->server->start();
     }
@@ -109,7 +116,32 @@ class OpenSwooleDriver extends AbstractServerDriver
             $response = $pipeline->handle($request);
 
             $this->sendSwooleResponse($response, $swooleResponse);
+        } catch (ValidationException $e) {
+            if ($this->environment !== 'production') {
+                echo "✅ Validation failed (expected):\n";
+                echo "📋 Errors: " . json_encode($e->getErrors(), JSON_PRETTY_PRINT) . "\n";
+            }
+
+            $swooleResponse->status(422);
+            $swooleResponse->header('Content-Type', 'application/json');
+            $swooleResponse->end(json_encode([
+                'error' => 'Validation failed',
+                'errors' => $e->getErrors()
+            ]));
         } catch (\Throwable $e) {
+            if ($this->environment !== 'production') {
+                error_log("💥 HYPERDRIVE ERROR:");
+                error_log("📍 Message: " . $e->getMessage());
+                error_log("📁 File: " . $e->getFile() . ":" . $e->getLine());
+                error_log("🔍 Trace:\n" . $e->getTraceAsString());
+                error_log("🎯 Request: " . $swooleRequest->server['request_method'] . " " . $swooleRequest->server['request_uri']);
+
+                echo "💥 HYPERDRIVE ERROR:\n";
+                echo "📍 Message: " . $e->getMessage() . "\n";
+                echo "📁 File: " . $e->getFile() . ":" . $e->getLine() . "\n";
+                echo "🔍 Trace:\n" . $e->getTraceAsString() . "\n";
+                echo "🎯 Request: " . $swooleRequest->server['request_method'] . " " . $swooleRequest->server['request_uri'] . "\n\n";
+            }
 
             $swooleResponse->status(500);
             $swooleResponse->end('Server Error: ' . ($this->environment !== 'production' ? $e->getMessage() : 'Internal error'));
@@ -118,17 +150,9 @@ class OpenSwooleDriver extends AbstractServerDriver
 
     protected function pipeGlobalMiddleware(MiddlewarePipeline $pipeline): void
     {
-        // For now, just log that we're skipping middleware
         if ($this->environment !== 'production') {
             echo "📝 Note: Global middleware is not yet implemented\n";
         }
-
-        // TODO: Implement actual middleware loading from config
-        // $globalMiddleware = Config::get('middleware.global', []);
-        // foreach ($globalMiddleware as $middlewareClass) {
-        //     $middleware = $this->container->get($middlewareClass);
-        //     $pipeline->pipe($middleware);
-        // }
     }
 
     private function sendSwooleResponse(Response $response, \OpenSwoole\Http\Response $swooleResponse): void
@@ -142,20 +166,17 @@ class OpenSwooleDriver extends AbstractServerDriver
         $swooleResponse->end($response->getContent());
     }
 
-    // ... rest of your existing WebSocket methods remain the same
     private function handleWebSocketHandshake(
         \OpenSwoole\Http\Request $request,
         \OpenSwoole\Http\Response $response
     ): bool {
         $path = $request->server['request_uri'] ?? '/';
 
-        // Find WebSocket gateway for this path
         $gateway = $this->webSocketRegistry->getGatewayByPath($path);
         if (!$gateway) {
-            return false; // No WebSocket gateway for this path
+            return false;
         }
 
-        // WebSocket handshake
         $secWebSocketKey = $request->header['sec-websocket-key'] ?? '';
         $patten = '#^[+/0-9A-Za-z]{21}[AQgw]==$#';
 
@@ -180,17 +201,9 @@ class OpenSwooleDriver extends AbstractServerDriver
         return true;
     }
 
-    private function handleWebSocketMessage(
-        OpenSwooleWebSocketServer $server,
-        \OpenSwoole\WebSocket\Frame $frame
-    ): void {
-        // This is handled by the individual WebSocket servers
-    }
+    private function handleWebSocketMessage($server, $frame): void {}
 
-    private function handleWebSocketClose(OpenSwooleServer $server, int $fd): void
-    {
-        // This is handled by the individual WebSocket servers
-    }
+    private function handleWebSocketClose($server, $fd): void {}
 
     private function startWebSocketServers(): void
     {
@@ -198,14 +211,11 @@ class OpenSwooleDriver extends AbstractServerDriver
             $server = new OpenSwooleWebSocketServer($gateway['path'], $gateway);
             $server->setDispatcher($this->webSocketDispatcher);
 
-            // Use WebSocket-specific host/port from config
             $websocketHost = $this->getWebSocketHost();
             $websocketPort = $this->getWebSocketPort();
 
-            // Store the server for this gateway path
             $this->webSocketServers[$gateway['path']] = $server;
 
-            // Start the WebSocket server
             $server->start($websocketPort, $websocketHost);
         }
     }
@@ -215,7 +225,6 @@ class OpenSwooleDriver extends AbstractServerDriver
         if ($this->webSocketRegistry) {
             $this->webSocketRegistry->registerGateway($gatewayClass);
 
-            // If server is already running, start the WebSocket server immediately
             if ($this->running && $this->server) {
                 $this->startWebSocketServerForGateway($gatewayClass);
             }
@@ -239,7 +248,6 @@ class OpenSwooleDriver extends AbstractServerDriver
 
     public function getServerPort(): int
     {
-        // Default port - in real implementation, this would come from config
         return 3000;
     }
 
@@ -250,8 +258,6 @@ class OpenSwooleDriver extends AbstractServerDriver
 
     public function handleRequest(Request $request): Response
     {
-        // This method is for internal framework use
-        // Actual HTTP requests are handled via handleSwooleRequest
         return new Response('OpenSwoole: Request handled internally', 200);
     }
 }
