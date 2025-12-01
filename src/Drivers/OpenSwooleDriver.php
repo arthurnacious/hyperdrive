@@ -110,6 +110,7 @@ class OpenSwooleDriver extends AbstractServerDriver
             );
             $pipeline = new \Hyperdrive\Http\Middleware\MiddlewarePipeline($finalHandler);
 
+            // 🆕 FIXED: Use parent class method to pipe global middleware
             $this->pipeGlobalMiddleware($pipeline);
 
             $response = $pipeline->handle($request);
@@ -147,13 +148,6 @@ class OpenSwooleDriver extends AbstractServerDriver
         }
     }
 
-    protected function pipeGlobalMiddleware(MiddlewarePipeline $pipeline): void
-    {
-        if ($this->environment !== 'production') {
-            echo "📝 Note: Global middleware is not yet implemented\n";
-        }
-    }
-
     private function sendSwooleResponse(Response $response, \OpenSwoole\Http\Response $swooleResponse): void
     {
         $swooleResponse->status($response->getStatusCode());
@@ -162,17 +156,7 @@ class OpenSwooleDriver extends AbstractServerDriver
             $swooleResponse->header($name, $value);
         }
 
-        // Handle binary content
-        $content = $response->getRawContent();
-
-        if (is_resource($content)) {
-            // Stream the resource
-            rewind($content);
-            $swooleResponse->write(stream_get_contents($content));
-            fclose($content);
-        } else {
-            $swooleResponse->end($response->getContent());
-        }
+        $swooleResponse->end($response->getContent());
     }
 
     private function handleWebSocketHandshake(

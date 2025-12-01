@@ -143,7 +143,11 @@ abstract class AbstractServerDriver extends AbstractDriver
             // Execute the pipeline
             return $pipeline->handle($request);
         } catch (\Throwable $e) {
-            return new Response('Server Error: ' . $e->getMessage(), 500);
+            if ($this->environment !== 'production') {
+                // Log error details in development
+                error_log("Middleware pipeline error: " . $e->getMessage());
+            }
+            return new Response('Server Error: ' . ($this->environment !== 'production' ? $e->getMessage() : 'Internal error'), 500);
         }
     }
 
@@ -158,7 +162,17 @@ abstract class AbstractServerDriver extends AbstractDriver
 
         foreach ($globalMiddleware as $middlewareClass) {
             if (class_exists($middlewareClass)) {
-                $this->globalMiddlewareInstances[] = $this->container->get($middlewareClass);
+                try {
+                    // Resolve middleware through container (supports dependencies)
+                    $this->globalMiddlewareInstances[] = $this->container->get($middlewareClass);
+                } catch (\Throwable $e) {
+                    // Log error but continue - don't crash the whole app
+                    if ($this->environment !== 'production') {
+                        error_log("Failed to initialize middleware {$middlewareClass}: " . $e->getMessage());
+                    }
+                }
+            } elseif ($this->environment !== 'production') {
+                error_log("Middleware class not found: {$middlewareClass}");
             }
         }
     }
@@ -166,7 +180,7 @@ abstract class AbstractServerDriver extends AbstractDriver
     /**
      * 🆕 Use pre-initialized middleware instances instead of creating new ones
      */
-    private function pipeGlobalMiddleware(MiddlewarePipeline $pipeline): void
+    protected function pipeGlobalMiddleware(MiddlewarePipeline $pipeline): void
     {
         if ($this->globalMiddlewareInstances === null) {
             $this->initializeGlobalMiddleware();
@@ -175,5 +189,16 @@ abstract class AbstractServerDriver extends AbstractDriver
         foreach ($this->globalMiddlewareInstances as $middleware) {
             $pipeline->pipe($middleware);
         }
+    }
+
+    /**
+     * Get the initialized global middleware instances (for testing)
+     */
+    public function getGlobalMiddlewareInstances(): array
+    {
+        if ($this->globalMiddlewareInstances === null) {
+            $this->initializeGlobalMiddleware();
+        }
+        return $this->globalMiddlewareInstances;
     }
 }
