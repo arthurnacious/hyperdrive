@@ -162,7 +162,17 @@ class OpenSwooleDriver extends AbstractServerDriver
             $swooleResponse->header($name, $value);
         }
 
-        $swooleResponse->end($response->getContent());
+        // Handle binary content
+        $content = $response->getRawContent();
+
+        if (is_resource($content)) {
+            // Stream the resource
+            rewind($content);
+            $swooleResponse->write(stream_get_contents($content));
+            fclose($content);
+        } else {
+            $swooleResponse->end($response->getContent());
+        }
     }
 
     private function handleWebSocketHandshake(
