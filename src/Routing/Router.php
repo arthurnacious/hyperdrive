@@ -10,6 +10,7 @@ use Hyperdrive\Attributes\Http\Verbs\Get;
 use Hyperdrive\Attributes\Http\Verbs\Patch;
 use Hyperdrive\Attributes\Http\Verbs\Post;
 use Hyperdrive\Attributes\Http\Verbs\Put;
+use Hyperdrive\Attributes\Middleware as MiddlewareAttribute;
 use Hyperdrive\Support\PathBuilder;
 
 class Router
@@ -154,12 +155,65 @@ class Router
 
         if ($httpMethod !== null) {
             $fullPath = PathBuilder::build($prefix, $path ?: '');
-            $this->routes[] = new RouteDefinition($httpMethod, $fullPath, $controllerClass, $method->getName());
+
+            // Collect middleware for this route
+            $routeMiddlewares = $this->collectRouteMiddlewares($controllerClass, $method);
+
+            $this->routes[] = new RouteDefinition(
+                $httpMethod,
+                $fullPath,
+                $controllerClass,
+                $method->getName(),
+                $routeMiddlewares
+            );
 
             // Invalidate map since we added a route
             $this->mapBuilt = false;
         }
     }
+
+    /**
+     * Collect middleware from controller class and method
+     * Method-specific middleware overrides/extends controller middleware
+     * 
+     * @param string $controllerClass
+     * @param \ReflectionMethod $method
+     * @return class-string<\Hyperdrive\Http\Middleware\MiddlewareInterface>[]
+     */
+
+    private function collectRouteMiddlewares(string $controllerClass, \ReflectionMethod $method): array
+    {
+        $middlewares = [];
+
+        // 1. Get controller-level middlewares
+        $reflectionClass = new \ReflectionClass($controllerClass);
+        $controllerMiddlewareAttrs = $reflectionClass->getAttributes(MiddlewareAttribute::class);
+
+        foreach ($controllerMiddlewareAttrs as $attr) {
+            $middlewareAttr = $attr->newInstance();
+            $middlewares = array_merge($middlewares, $middlewareAttr->middlewares);
+        }
+
+        // 2. Get method-level middlewares
+        $methodMiddlewareAttrs = $method->getAttributes(MiddlewareAttribute::class);
+
+        foreach ($methodMiddlewareAttrs as $attr) {
+            $middlewareAttr = $attr->newInstance();
+            $middlewares = array_merge($middlewares, $middlewareAttr->middlewares);
+        }
+
+        // Remove duplicates while preserving order
+        $uniqueMiddlewares = [];
+        foreach ($middlewares as $mwClass) {
+            if (!in_array($mwClass, $uniqueMiddlewares, true)) {
+                $uniqueMiddlewares[] = $mwClass;
+            }
+        }
+
+        return $uniqueMiddlewares;
+    }
+
+
 
     /**
      * @return RouteDefinition[]
@@ -180,5 +234,22 @@ class Router
             'parameterized_routes' => count($this->routes) - count($this->routeMap),
             'map_built' => $this->mapBuilt
         ];
+    }
+
+    /**
+     * Debug method to see middleware for routes
+     */
+    public function getRoutesWithMiddleware(): array
+    {
+        $result = [];
+        foreach ($this->routes as $route) {
+            $result[] = [
+                'method' => $route->getMethod(),
+                'path' => $route->getPath(),
+                'controller' => $route->getControllerClass() . '::' . $route->getMethodName(),
+                'middleware' => $route->getMiddleware(),
+            ];
+        }
+        return $result;
     }
 }

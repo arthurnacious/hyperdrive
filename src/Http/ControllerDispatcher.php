@@ -113,7 +113,7 @@ class ControllerDispatcher
             try {
                 return new $typeName($request->getBody());
             } catch (ValidationException $e) {
-                // 🆕 Re-throw ValidationException so it becomes a 422 response
+                //Re-throw ValidationException so it becomes a 422 response
                 throw $e;
             } catch (\Throwable $e) {
                 // Other DTO errors become 500

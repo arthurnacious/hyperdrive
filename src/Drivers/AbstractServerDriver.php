@@ -39,8 +39,8 @@ abstract class AbstractServerDriver extends AbstractDriver
 
         $this->dispatcher = new ControllerDispatcher($this->container);
 
-        // 🆕 Pre-initialize global middleware instances
-        $this->initializeGlobalMiddleware();
+        // Pre-initialize global middleware instances
+        $this->initializeGlobalMiddlewares(); // Changed to plural
     }
 
     public function getServerHost(): string
@@ -133,18 +133,23 @@ abstract class AbstractServerDriver extends AbstractDriver
         }
 
         try {
-            // Create middleware pipeline for this request
-            $finalHandler = new ControllerRequestHandler($this->container, $this->dispatcher, $route);
-            $pipeline = new MiddlewarePipeline($finalHandler);
+            // Updated: ControllerRequestHandler now handles route middlewares internally
+            $finalHandler = new \Hyperdrive\Http\Middleware\ControllerRequestHandler(
+                $this->container,
+                $this->dispatcher,
+                $route
+            );
 
-            // 🆕 Add pre-initialized global middleware (FASTER!)
-            $this->pipeGlobalMiddleware($pipeline);
+            // Create a pipeline for global middlewares only
+            $globalPipeline = new \Hyperdrive\Http\Middleware\MiddlewarePipeline($finalHandler);
 
-            // Execute the pipeline
-            return $pipeline->handle($request);
+            // Add global middlewares
+            $this->pipeGlobalMiddlewares($globalPipeline); // Changed to plural
+
+            // Execute global middlewares pipeline (triggers route middlewares inside)
+            return $globalPipeline->handle($request);
         } catch (\Throwable $e) {
             if ($this->environment !== 'production') {
-                // Log error details in development
                 error_log("Middleware pipeline error: " . $e->getMessage());
             }
             return new Response('Server Error: ' . ($this->environment !== 'production' ? $e->getMessage() : 'Internal error'), 500);
@@ -152,15 +157,15 @@ abstract class AbstractServerDriver extends AbstractDriver
     }
 
     /**
-     * 🆕 Pre-initialize global middleware instances during boot
+     * Pre-initialize global middleware instances during boot
      * This avoids config lookups and DI container calls on every request
      */
-    private function initializeGlobalMiddleware(): void
+    private function initializeGlobalMiddlewares(): void // Changed to plural
     {
-        $globalMiddleware = Config::get('middleware.global', []);
+        $globalMiddlewares = Config::get('middleware.global', []); // Variable plural
         $this->globalMiddlewareInstances = [];
 
-        foreach ($globalMiddleware as $middlewareClass) {
+        foreach ($globalMiddlewares as $middlewareClass) {
             if (class_exists($middlewareClass)) {
                 try {
                     // Resolve middleware through container (supports dependencies)
@@ -178,12 +183,12 @@ abstract class AbstractServerDriver extends AbstractDriver
     }
 
     /**
-     * 🆕 Use pre-initialized middleware instances instead of creating new ones
+     * Use pre-initialized middleware instances instead of creating new ones
      */
-    protected function pipeGlobalMiddleware(MiddlewarePipeline $pipeline): void
+    protected function pipeGlobalMiddlewares(MiddlewarePipeline $pipeline): void // Changed to plural
     {
         if ($this->globalMiddlewareInstances === null) {
-            $this->initializeGlobalMiddleware();
+            $this->initializeGlobalMiddlewares(); // Changed to plural
         }
 
         foreach ($this->globalMiddlewareInstances as $middleware) {
@@ -197,7 +202,7 @@ abstract class AbstractServerDriver extends AbstractDriver
     public function getGlobalMiddlewareInstances(): array
     {
         if ($this->globalMiddlewareInstances === null) {
-            $this->initializeGlobalMiddleware();
+            $this->initializeGlobalMiddlewares(); // Changed to plural
         }
         return $this->globalMiddlewareInstances;
     }
