@@ -21,8 +21,20 @@ class ControllerRequestHandler implements RequestHandlerInterface
 
     public function handle(Request $request): Response
     {
+        // Create a final handler that calls dispatch()
+        $dispatchHandler = new class($this) implements RequestHandlerInterface {
+            public function __construct(
+                private ControllerRequestHandler $handler
+            ) {}
+
+            public function handle(Request $request): Response
+            {
+                return $this->handler->dispatch($request);
+            }
+        };
+
         // Create pipeline with route-specific middlewares
-        $pipeline = new MiddlewarePipeline($this);
+        $pipeline = new MiddlewarePipeline($dispatchHandler);
 
         // Add route-specific middlewares to pipeline
         $this->addRouteMiddlewares($pipeline);

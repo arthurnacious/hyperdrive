@@ -10,6 +10,7 @@ use Hyperdrive\Http\ControllerDispatcher;
 use Hyperdrive\Http\Middleware\ControllerRequestHandler;
 use Hyperdrive\Http\Middleware\MiddlewareInterface;
 use Hyperdrive\Http\Middleware\MiddlewarePipeline;
+use Hyperdrive\Http\Middleware\RequestHandlerInterface;
 use Hyperdrive\Http\Request;
 use Hyperdrive\Http\Response;
 use Hyperdrive\Routing\Router;
@@ -119,9 +120,14 @@ abstract class AbstractServerDriver extends AbstractDriver
 
     protected function handleFrameworkRequest(Request $request): Response
     {
+        if ($request->getMethod() === 'OPTIONS') {
+            return new Response('', 204);
+        }
+
         if (!$this->router || !$this->dispatcher) {
             return new Response('Router or Dispatcher not initialized', 500);
         }
+
 
         $route = $this->router->findRoute(
             $request->getMethod(),
@@ -133,20 +139,32 @@ abstract class AbstractServerDriver extends AbstractDriver
         }
 
         try {
-            // Updated: ControllerRequestHandler now handles route middlewares internally
-            $finalHandler = new \Hyperdrive\Http\Middleware\ControllerRequestHandler(
+            // Create controller handler (does NOT implement RequestHandlerInterface)
+            $controllerHandler = new \Hyperdrive\Http\Middleware\ControllerRequestHandler(
                 $this->container,
                 $this->dispatcher,
                 $route
             );
 
-            // Create a pipeline for global middlewares only
+            // Wrap it in a RequestHandlerInterface for the global middleware pipeline
+            $finalHandler = new class($controllerHandler) implements RequestHandlerInterface {
+                public function __construct(
+                    private \Hyperdrive\Http\Middleware\ControllerRequestHandler $handler
+                ) {}
+
+                public function handle(Request $request): Response
+                {
+                    return $this->handler->handle($request);
+                }
+            };
+
+            // Create pipeline for global middlewares
             $globalPipeline = new \Hyperdrive\Http\Middleware\MiddlewarePipeline($finalHandler);
 
             // Add global middlewares
-            $this->pipeGlobalMiddlewares($globalPipeline); // Changed to plural
+            $this->pipeGlobalMiddlewares($globalPipeline);
 
-            // Execute global middlewares pipeline (triggers route middlewares inside)
+            // Execute global middleware pipeline
             return $globalPipeline->handle($request);
         } catch (\Throwable $e) {
             if ($this->environment !== 'production') {
@@ -154,6 +172,27 @@ abstract class AbstractServerDriver extends AbstractDriver
             }
             return new Response('Server Error: ' . ($this->environment !== 'production' ? $e->getMessage() : 'Internal error'), 500);
         }
+    }
+
+    /**
+     * Handle OPTIONS preflight requests for CORS
+     * Returns proper CORS headers for browser preflight checks
+     */
+    private function handleOptionsRequest(Request $request): Response
+    {
+        $response = new Response('', 204);
+
+        // Let CORS middleware add headers to it
+        // But CORS middleware isn't in the pipeline for this...
+
+        // Instead, manually add CORS headers
+        return new Response('', 204, [
+            'Access-Control-Allow-Origin' => '*',
+            'Access-Control-Allow-Methods' => 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Authorization, X-Requested-With',
+            'Access-Control-Allow-Credentials' => 'true',
+            'Access-Control-Max-Age' => '86400',
+        ]);;
     }
 
     /**

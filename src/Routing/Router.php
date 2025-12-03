@@ -7,6 +7,7 @@ namespace Hyperdrive\Routing;
 use Hyperdrive\Attributes\Http\Route as RouteAttribute;
 use Hyperdrive\Attributes\Http\Verbs\Delete;
 use Hyperdrive\Attributes\Http\Verbs\Get;
+use Hyperdrive\Attributes\Http\Verbs\Options;
 use Hyperdrive\Attributes\Http\Verbs\Patch;
 use Hyperdrive\Attributes\Http\Verbs\Post;
 use Hyperdrive\Attributes\Http\Verbs\Put;
@@ -93,8 +94,16 @@ class Router
         return null;
     }
 
+
     public function findRoute(string $method, string $path): ?RouteDefinition
     {
+        // 🆕 Handle OPTIONS method for CORS preflight
+        if ($method === 'OPTIONS') {
+            // Return a dummy route that will pass through middleware
+            // The actual HTTP method will be determined by looking for other methods on this path
+            return $this->findAnyRouteForPath($path) ?? $this->createOptionsRoute($path);
+        }
+
         // Use fast map lookup first
         if (!$this->mapBuilt) {
             $this->buildRouteMap();
@@ -109,6 +118,34 @@ class Router
 
         // Fallback to pattern matching for parameterized routes
         return $this->findRouteByPattern($method, $path);
+    }
+
+    /**
+     * Find any route for this path (to determine allowed methods for CORS)
+     */
+    private function findAnyRouteForPath(string $path): ?RouteDefinition
+    {
+        // Check all methods that might exist for this path
+        $methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
+
+        foreach ($methods as $method) {
+            $route = $this->findRouteByPattern($method, $path);
+            if ($route) {
+                return $route;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Create a dummy OPTIONS route
+     */
+    private function createOptionsRoute(string $path): RouteDefinition
+    {
+        // Return a route that points to a dummy controller
+        // This will allow middleware to run but won't actually dispatch
+        return new RouteDefinition('OPTIONS', $path, '', '');
     }
 
     private function getClassRoute(\ReflectionClass $reflection): ?RouteAttribute
@@ -148,6 +185,10 @@ class Router
                     break;
                 case Patch::class:
                     $httpMethod = 'PATCH';
+                    $path = $instance->path;
+                    break;
+                case Options::class:
+                    $httpMethod = 'OPTIONS';
                     $path = $instance->path;
                     break;
             }
@@ -247,7 +288,7 @@ class Router
                 'method' => $route->getMethod(),
                 'path' => $route->getPath(),
                 'controller' => $route->getControllerClass() . '::' . $route->getMethodName(),
-                'middleware' => $route->getMiddleware(),
+                'middleware' => $route->getMiddlewares(),
             ];
         }
         return $result;

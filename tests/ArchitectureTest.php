@@ -7,6 +7,7 @@ namespace Hyperdrive\Tests;
 use Hyperdrive\Attributes\Http\Route;
 use Hyperdrive\Attributes\Http\Verbs\Delete;
 use Hyperdrive\Attributes\Http\Verbs\Get;
+use Hyperdrive\Attributes\Http\Verbs\Options;
 use Hyperdrive\Attributes\Http\Verbs\Patch;
 use Hyperdrive\Attributes\Http\Verbs\Post;
 use Hyperdrive\Attributes\Http\Verbs\Put;
@@ -27,6 +28,24 @@ class ArchitectureTest extends TestCase
     {
         $reflection = new \ReflectionClass(\Hyperdrive\Application\ModuleRegistry::class);
         $this->assertFalse($reflection->isFinal());
+    }
+
+    public function test_options_verb_attribute_is_final(): void
+    {
+        $reflection = new \ReflectionClass(\Hyperdrive\Attributes\Http\Verbs\Options::class);
+        $this->assertTrue($reflection->isFinal(), "Options attribute should be final");
+
+        // Check it has constructor
+        $constructor = $reflection->getConstructor();
+        $this->assertNotNull($constructor, "Options should have constructor");
+
+        // Check it doesn't extend anything
+        $this->assertFalse($reflection->getParentClass(), "Options should not extend anything");
+
+        // Check it has correct attribute target
+        $attributes = $reflection->getAttributes(\Attribute::class);
+        $attribute = $attributes[0]->newInstance();
+        $this->assertEquals(\Attribute::TARGET_METHOD, $attribute->flags, "Options should target methods");
     }
 
     public function test_module_has_correct_target(): void
@@ -59,6 +78,7 @@ class ArchitectureTest extends TestCase
             Delete::class,
             Patch::class,
             Route::class,
+            Options::class,
         ];
 
         foreach ($verbs as $verb) {
@@ -75,6 +95,7 @@ class ArchitectureTest extends TestCase
             Put::class,
             Delete::class,
             Patch::class,
+            Options::class,
         ];
 
         foreach ($verbs as $verb) {
