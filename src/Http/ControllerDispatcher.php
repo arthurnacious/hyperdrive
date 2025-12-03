@@ -6,6 +6,7 @@ namespace Hyperdrive\Http;
 
 use Hyperdrive\Container\Container;
 use Hyperdrive\Http\Dto\Validation\ValidationException;
+use Hyperdrive\Routing\OptionsRoute;
 use Hyperdrive\Routing\RouteDefinition;
 
 class ControllerDispatcher
@@ -19,6 +20,14 @@ class ControllerDispatcher
 
     public function dispatch(RouteDefinition $route, Request $request): mixed
     {
+
+        if ($route instanceof OptionsRoute) {
+            // Return proper OPTIONS response
+            return new Response('', 204, [
+                'Allow' => implode(', ', $route->getAllowedMethods())
+            ]);
+        }
+
         $controllerClass = $route->getControllerClass();
 
         // Reuse controller instance (stateless = safe to reuse)

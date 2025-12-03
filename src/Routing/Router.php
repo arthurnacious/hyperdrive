@@ -22,18 +22,19 @@ class Router
     /** @var array<string, RouteDefinition> */
     private array $routeMap = []; // Fast lookup: method+path → RouteDefinition
 
+    /** @var array<string, array<string, bool>> */
+    private array $pathMethodMap = []; // 🆕 O(1) lookup: path => [method => true]
+
     /** @var bool */
-    private bool $mapBuilt = false; // Track if map is current
+    private bool $mapBuilt = false;
 
     public function registerController(string $controllerClass, string $prefix = ''): void
     {
         $reflection = new \ReflectionClass($controllerClass);
 
-        // Get class-level Route attribute for TEST COMPATIBILITY
         $classRoute = $this->getClassRoute($reflection);
         $controllerPrefix = $classRoute?->prefix ?? '';
 
-        // Combine module prefix + controller prefix
         $fullPrefix = PathBuilder::build($prefix, $controllerPrefix);
 
         foreach ($reflection->getMethods() as $method) {
@@ -42,12 +43,11 @@ class Router
             }
         }
 
-        // Invalidate route map since we added new routes
         $this->mapBuilt = false;
     }
 
     /**
-     * Build fast lookup map from registered routes
+     * Build fast lookup maps
      */
     public function buildRouteMap(): void
     {
@@ -73,7 +73,7 @@ class Router
     }
 
     /**
-     * Check if route path contains parameters (like {id})
+     * Check if route path contains parameters
      */
     private function routeHasParameters(string $path): bool
     {
@@ -94,14 +94,19 @@ class Router
         return null;
     }
 
-
     public function findRoute(string $method, string $path): ?RouteDefinition
     {
-        // 🆕 Handle OPTIONS method for CORS preflight
+        // 🆕 O(1) OPTIONS handling
         if ($method === 'OPTIONS') {
-            // Return a dummy route that will pass through middleware
-            // The actual HTTP method will be determined by looking for other methods on this path
-            return $this->findAnyRouteForPath($path) ?? $this->createOptionsRoute($path);
+            $allowedMethods = $this->getAllowedMethodsForPath($path);
+
+            if (empty($allowedMethods)) {
+                // No route exists for this path
+                return null;
+            }
+
+            // Return special OPTIONS route
+            return new OptionsRoute($path, $allowedMethods);
         }
 
         // Use fast map lookup first
@@ -111,7 +116,7 @@ class Router
 
         $key = $this->generateRouteKey($method, $path);
 
-        // Fast O(1) lookup
+        // Fast O(1) lookup for static routes
         if (isset($this->routeMap[$key])) {
             return $this->routeMap[$key];
         }
@@ -121,31 +126,19 @@ class Router
     }
 
     /**
-     * Find any route for this path (to determine allowed methods for CORS)
+     * 🆕 Get allowed methods for path in O(1)
      */
-    private function findAnyRouteForPath(string $path): ?RouteDefinition
+    public function getAllowedMethodsForPath(string $path): array
     {
-        // Check all methods that might exist for this path
-        $methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
-
-        foreach ($methods as $method) {
-            $route = $this->findRouteByPattern($method, $path);
-            if ($route) {
-                return $route;
-            }
-        }
-
-        return null;
+        return array_keys($this->pathMethodMap[$path] ?? []);
     }
 
     /**
-     * Create a dummy OPTIONS route
+     * 🆕 Check if path has any registered method
      */
-    private function createOptionsRoute(string $path): RouteDefinition
+    public function pathExists(string $path): bool
     {
-        // Return a route that points to a dummy controller
-        // This will allow middleware to run but won't actually dispatch
-        return new RouteDefinition('OPTIONS', $path, '', '');
+        return !empty($this->pathMethodMap[$path]);
     }
 
     private function getClassRoute(\ReflectionClass $reflection): ?RouteAttribute
@@ -197,7 +190,13 @@ class Router
         if ($httpMethod !== null) {
             $fullPath = PathBuilder::build($prefix, $path ?: '');
 
-            // Collect middleware for this route
+            // 🆕 Update path-method map for O(1) OPTIONS lookup
+            if (!isset($this->pathMethodMap[$fullPath])) {
+                $this->pathMethodMap[$fullPath] = [];
+            }
+            $this->pathMethodMap[$fullPath][$httpMethod] = true;
+
+            // Collect middleware
             $routeMiddlewares = $this->collectRouteMiddlewares($controllerClass, $method);
 
             $this->routes[] = new RouteDefinition(
@@ -208,20 +207,13 @@ class Router
                 $routeMiddlewares
             );
 
-            // Invalidate map since we added a route
             $this->mapBuilt = false;
         }
     }
 
     /**
      * Collect middleware from controller class and method
-     * Method-specific middleware overrides/extends controller middleware
-     * 
-     * @param string $controllerClass
-     * @param \ReflectionMethod $method
-     * @return class-string<\Hyperdrive\Http\Middleware\MiddlewareInterface>[]
      */
-
     private function collectRouteMiddlewares(string $controllerClass, \ReflectionMethod $method): array
     {
         $middlewares = [];
@@ -254,8 +246,6 @@ class Router
         return $uniqueMiddlewares;
     }
 
-
-
     /**
      * @return RouteDefinition[]
      */
@@ -273,24 +263,44 @@ class Router
             'total_routes' => count($this->routes),
             'static_routes' => count($this->routeMap),
             'parameterized_routes' => count($this->routes) - count($this->routeMap),
+            'unique_paths' => count($this->pathMethodMap),
             'map_built' => $this->mapBuilt
         ];
     }
 
     /**
-     * Debug method to see middleware for routes
+     * Debug method to see allowed methods per path
      */
-    public function getRoutesWithMiddleware(): array
+    public function getPathMethodMap(): array
     {
         $result = [];
-        foreach ($this->routes as $route) {
-            $result[] = [
-                'method' => $route->getMethod(),
-                'path' => $route->getPath(),
-                'controller' => $route->getControllerClass() . '::' . $route->getMethodName(),
-                'middleware' => $route->getMiddlewares(),
-            ];
+        foreach ($this->pathMethodMap as $path => $methods) {
+            $result[$path] = array_keys($methods);
         }
         return $result;
+    }
+}
+
+/**
+ * 🆕 Special route class for OPTIONS requests
+ */
+class OptionsRoute extends RouteDefinition
+{
+    private array $allowedMethods;
+
+    public function __construct(string $path, array $allowedMethods)
+    {
+        parent::__construct('OPTIONS', $path, '', '', []);
+        $this->allowedMethods = $allowedMethods;
+    }
+
+    public function getAllowedMethods(): array
+    {
+        return $this->allowedMethods;
+    }
+
+    public function isOptionsRoute(): bool
+    {
+        return true;
     }
 }
