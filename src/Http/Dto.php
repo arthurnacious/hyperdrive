@@ -10,24 +10,21 @@ use Hyperdrive\Http\Dto\Validation\ValidatorInterface;
 abstract class Dto
 {
     private static array $validationCache = [];
-    private array $errors = [];
+    protected array $errors = [];
+    protected array $context = [];
 
-    public function __construct(array $data)
+    public function __construct(array $data, array $context = [])
     {
+        $this->context = $context;
         $this->errors = [];
 
-        // 1. Validate types first
         $this->validateTypes($data);
 
-        // 2. If type validation fails, throw immediately
         if (!empty($this->errors)) {
             throw new ValidationException($this->errors);
         }
 
-        // 3. Convert and assign values
         $this->hydrate($data);
-
-        // 4. Validate business rules
         $this->validate();
     }
 
@@ -78,11 +75,9 @@ abstract class Dto
                 $type = $property->getType();
 
                 if ($type && !$type->isBuiltin()) {
-                    // Skip non-builtin types for now (objects, etc.)
                     continue;
                 }
 
-                // Convert value to expected type before assignment
                 $convertedValue = $this->convertToType($value, $type);
                 $this->{$key} = $convertedValue;
             }
@@ -101,12 +96,10 @@ abstract class Dto
 
         $typeName = $type->getName();
 
-        // Handle null values for nullable types
         if ($value === null && $type->allowsNull()) {
             return null;
         }
 
-        // Convert to expected type
         return match ($typeName) {
             'int' => (int) $value,
             'float' => (float) $value,
@@ -121,7 +114,6 @@ abstract class Dto
     {
         $className = static::class;
 
-        // 🚀 Cache validation rules for performance
         if (!isset(self::$validationCache[$className])) {
             self::$validationCache[$className] = $this->buildValidationRules();
         }
@@ -129,7 +121,6 @@ abstract class Dto
         $rules = self::$validationCache[$className];
         $this->errors = [];
 
-        // 🚀 Fast validation with cached rules
         foreach ($rules as $propertyName => $validators) {
             $value = $this->{$propertyName} ?? null;
             foreach ($validators as $validator) {
@@ -138,6 +129,9 @@ abstract class Dto
                 }
             }
         }
+
+        $this->runFieldCustomValidations();
+        $this->runPostValidation();
 
         if (!empty($this->errors)) {
             throw new ValidationException($this->errors);
@@ -162,6 +156,90 @@ abstract class Dto
         }
 
         return $rules;
+    }
+
+    private function runFieldCustomValidations(): void
+    {
+        $reflection = new \ReflectionClass($this);
+
+        foreach ($reflection->getProperties() as $property) {
+            foreach ($property->getAttributes() as $attribute) {
+                $instance = $attribute->newInstance();
+
+                if ($instance instanceof \Hyperdrive\Http\Dto\Validation\ValidateWith) {
+                    $methodName = $instance->method;
+                    $propertyName = $property->getName();
+                    $propertyValue = $this->{$propertyName} ?? null;
+
+                    if (method_exists($this, $methodName)) {
+                        $method = new \ReflectionMethod($this, $methodName);
+                        $params = [];
+
+                        foreach ($method->getParameters() as $param) {
+                            $paramName = $param->getName();
+
+                            if ($paramName === 'field' || $paramName === 'property') {
+                                $params[] = $propertyName;
+                            } else {
+                                $params[] = $propertyValue;
+                            }
+                        }
+
+                        $method->invokeArgs($this, $params);
+                    }
+                }
+            }
+        }
+    }
+
+    private function runPostValidation(): void
+    {
+        if (method_exists($this, 'validateAll')) {
+            $this->validateAll();
+        }
+
+        $reflection = new \ReflectionClass($this);
+        foreach ($reflection->getMethods() as $method) {
+            $methodName = $method->getName();
+            if (
+                str_starts_with($methodName, 'validatePost') ||
+                str_starts_with($methodName, 'validateAfter')
+            ) {
+                $method->invoke($this);
+            }
+        }
+    }
+
+    protected function addError(string $field, string|array ...$messages): void
+    {
+        foreach ($messages as $message) {
+            if (is_array($message)) {
+                foreach ($message as $msg) {
+                    $this->errors[$field][] = $msg;
+                }
+            } else {
+                $this->errors[$field][] = $message;
+            }
+        }
+    }
+
+    protected function getContext(string $key, mixed $default = null): mixed
+    {
+        return $this->context[$key] ?? $default;
+    }
+
+    protected function addErrorIf(string $field, bool $condition, string $message): void
+    {
+        if ($condition) {
+            $this->addError($field, $message);
+        }
+    }
+
+    protected function addErrorUnless(string $field, bool $condition, string $message): void
+    {
+        if (!$condition) {
+            $this->addError($field, $message);
+        }
     }
 
     public function isValid(): bool
