@@ -167,7 +167,8 @@ abstract class Dto
                 $instance = $attribute->newInstance();
 
                 if ($instance instanceof \Hyperdrive\Http\Dto\Validation\ValidateWith) {
-                    $methodName = $instance->method;
+                    // 🔥 Use getter instead of direct property access
+                    $methodName = $instance->getMethod();
                     $propertyName = $property->getName();
                     $propertyValue = $this->{$propertyName} ?? null;
 
@@ -194,23 +195,30 @@ abstract class Dto
 
     private function runPostValidation(): void
     {
-        if (method_exists($this, 'validateAll')) {
-            $this->validateAll();
+        $reflection = new \ReflectionClass($this);
+
+        // Check for validateAll() method
+        if ($reflection->hasMethod('validateAll')) {
+            $method = $reflection->getMethod('validateAll');
+            if ($method->isPrivate() && !$method->isAbstract()) {
+                $method->invoke($this);
+            }
         }
 
-        $reflection = new \ReflectionClass($this);
         foreach ($reflection->getMethods() as $method) {
             $methodName = $method->getName();
             if (
-                str_starts_with($methodName, 'validatePost') ||
-                str_starts_with($methodName, 'validateAfter')
+                (str_starts_with($methodName, 'validatePost') ||
+                    str_starts_with($methodName, 'validateAfter')) &&
+                $method->isPrivate() &&
+                !$method->isAbstract()
             ) {
                 $method->invoke($this);
             }
         }
     }
 
-    protected function addError(string $field, string|array ...$messages): void
+    public function addError(string $field, string|array ...$messages): void
     {
         foreach ($messages as $message) {
             if (is_array($message)) {
@@ -228,14 +236,14 @@ abstract class Dto
         return $this->context[$key] ?? $default;
     }
 
-    protected function addErrorIf(string $field, bool $condition, string $message): void
+    public function addErrorIf(string $field, bool $condition, string $message): void
     {
         if ($condition) {
             $this->addError($field, $message);
         }
     }
 
-    protected function addErrorUnless(string $field, bool $condition, string $message): void
+    public function addErrorUnless(string $field, bool $condition, string $message): void
     {
         if (!$condition) {
             $this->addError($field, $message);
