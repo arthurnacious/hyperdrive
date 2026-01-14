@@ -1,3 +1,4 @@
+like this?
 <?php
 
 declare(strict_types=1);
@@ -119,19 +120,23 @@ class ControllerDispatcher
 
         // 3. DTO objects (from request body) - WITH VALIDATION EXCEPTION HANDLING
         if (is_subclass_of($typeName, Dto::class)) {
-            try {
-                return new $typeName($request->getBody(), ['request' => $request]);
-            } catch (ValidationException $e) {
-                // Re-throw ValidationException so it becomes a 422 response
-                throw $e;
-            } catch (\Throwable $e) {
-                // Other DTO errors become 500
-                throw new \RuntimeException("DTO creation failed: " . $e->getMessage(), 0, $e);
-            }
+            return $this->createDto($typeName, $request);
         }
 
         // 4. DI container resolution
         return $this->container->get($typeName);
+    }
+
+    private function createDto(string $dtoClass, Request $request): Dto
+    {
+        // Use DtoFactory
+        $factory = new DtoFactory($this->container);
+
+        try {
+            return $factory->create($dtoClass, $request->getBody());
+        } catch (ValidationException $e) {
+            throw $e; // Re-throw for 422 response
+        }
     }
 
     private function convertRouteParameter(string $value, string $type): mixed
