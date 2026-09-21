@@ -1,4 +1,3 @@
-like this?
 <?php
 
 declare(strict_types=1);
@@ -6,6 +5,7 @@ declare(strict_types=1);
 namespace Hyperdrive\Http;
 
 use Hyperdrive\Container\Container;
+use Hyperdrive\Container\DtoFactory;
 use Hyperdrive\Http\Dto\Validation\ValidationException;
 use Hyperdrive\Routing\OptionsRoute;
 use Hyperdrive\Routing\RouteDefinition;

@@ -31,4 +31,13 @@ class StreamedResponse extends Response
             fclose($this->resource);
         }
     }
+
+    /**
+     * Expose the underlying stream resource for drivers (e.g. OpenSwoole)
+     * that can't call send()/fpassthru() and must stream chunks themselves.
+     */
+    public function getResource()
+    {
+        return $this->resource;
+    }
 }

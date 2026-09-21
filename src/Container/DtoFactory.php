@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Hyperdrive\Http;
+namespace Hyperdrive\Container;
 
-use Hyperdrive\Container\Container;
+use Hyperdrive\Http\Dto;
 
 class DtoFactory
 {

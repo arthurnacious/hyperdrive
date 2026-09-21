@@ -187,7 +187,6 @@ abstract class Dto
         $reflection = new \ReflectionClass($this);
 
         foreach ($reflection->getProperties() as $property) {
-            $property->setAccessible(true);
             $values[$property->getName()] = $property->getValue($this);
         }
 

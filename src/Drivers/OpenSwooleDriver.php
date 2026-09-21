@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Hyperdrive\Drivers;
 
+use Hyperdrive\Config\Config;
 use Hyperdrive\Http\Dto\Validation\ValidationException;
 use Hyperdrive\Http\Middleware\MiddlewarePipeline;
 use Hyperdrive\Http\Request;
 use Hyperdrive\Http\Response;
+use Hyperdrive\Http\StreamedResponse;
+use Hyperdrive\WebSocket\OpenSwooleDriverConnection;
+use Hyperdrive\WebSocket\WebSocketMessage;
 use OpenSwoole\WebSocket\Server as OpenSwooleWebSocketServer;
 use OpenSwoole\Http\Request as OpenSwooleRequest;
 use OpenSwoole\Http\Response as OpenSwooleResponse;
@@ -15,7 +19,9 @@ use OpenSwoole\Http\Response as OpenSwooleResponse;
 class OpenSwooleDriver extends AbstractServerDriver
 {
     private ?OpenSwooleWebSocketServer $server = null;
-    private array $webSocketServers = [];
+
+    /** @var array<int, array{gateway: array, attributes: array}> fd => connection state */
+    private array $wsConnections = [];
     private ?\Hyperdrive\WebSocket\WebSocketRegistry $webSocketRegistry = null;
     private ?\Hyperdrive\WebSocket\WebSocketGatewayDispatcher $webSocketDispatcher = null;
 
@@ -40,6 +46,9 @@ class OpenSwooleDriver extends AbstractServerDriver
             'enable_coroutine' => true,
             'open_http_protocol' => true, // Allow HTTP requests too
             'open_websocket_protocol' => true,
+            // Recycle workers periodically so any slow leak in app code
+            // (or ours) can't accumulate for the life of the process.
+            'max_request' => Config::get('server.http.max_request', 10000),
         ]);
 
         // Register event handlers
@@ -152,7 +161,40 @@ class OpenSwooleDriver extends AbstractServerDriver
             $swooleResponse->header($name, $value);
         }
 
+        // StreamedResponse keeps its payload in a separate resource property
+        // (its own getContent() would otherwise stringify the file handle),
+        // and a plain Response can also carry a raw resource as content.
+        $resource = $response instanceof StreamedResponse
+            ? $response->getResource()
+            : $response->getRawContent();
+
+        if (is_resource($resource)) {
+            $this->streamResourceToSwoole($resource, $swooleResponse);
+            return;
+        }
+
         $swooleResponse->end($response->getContent());
+    }
+
+    /**
+     * Write a resource to the Swoole response in chunks instead of buffering
+     * it into memory, and guarantee the file handle is always closed.
+     */
+    private function streamResourceToSwoole($resource, OpenSwooleResponse $swooleResponse): void
+    {
+        try {
+            while (!feof($resource)) {
+                $chunk = fread($resource, 8192);
+                if ($chunk === false || $chunk === '') {
+                    break;
+                }
+                $swooleResponse->write($chunk);
+            }
+        } finally {
+            fclose($resource);
+        }
+
+        $swooleResponse->end();
     }
 
     private function handleWebSocketHandshake(
@@ -187,12 +229,93 @@ class OpenSwooleDriver extends AbstractServerDriver
         $response->status(101);
         $response->end();
 
+        $fd = $request->fd;
+        $this->wsConnections[$fd] = [
+            'gateway' => $gateway,
+            'attributes' => [],
+        ];
+
+        $this->webSocketDispatcher->dispatchConnection(
+            $gateway,
+            new OpenSwooleDriverConnection($this, $fd)
+        );
+
         return true;
     }
 
-    private function handleWebSocketMessage($server, $frame): void {}
+    private function handleWebSocketMessage($server, $frame): void
+    {
+        $fd = $frame->fd;
 
-    private function handleWebSocketClose($server, $fd): void {}
+        if (!isset($this->wsConnections[$fd])) {
+            // Not a fd we tracked at handshake time (or already closed) — ignore.
+            return;
+        }
+
+        $data = json_decode($frame->data, true);
+        if (!is_array($data)) {
+            $data = ['type' => null, 'data' => $frame->data];
+        }
+
+        $connection = new OpenSwooleDriverConnection($this, $fd);
+        $message = new WebSocketMessage($data, $connection);
+
+        $this->webSocketDispatcher->dispatchMessage(
+            $this->wsConnections[$fd]['gateway'],
+            $message
+        );
+    }
+
+    private function handleWebSocketClose($server, $fd): void
+    {
+        // The 'close' event fires for every connection (plain HTTP included),
+        // so only dispatch/clean up fds we actually registered as WebSockets.
+        if (!isset($this->wsConnections[$fd])) {
+            return;
+        }
+
+        $gateway = $this->wsConnections[$fd]['gateway'];
+
+        $this->webSocketDispatcher->dispatchDisconnection(
+            $gateway,
+            new OpenSwooleDriverConnection($this, $fd)
+        );
+
+        unset($this->wsConnections[$fd]);
+    }
+
+    public function pushToConnection(int $fd, array $data): void
+    {
+        if ($this->server && $this->server->exist($fd)) {
+            $this->server->push($fd, json_encode($data, JSON_THROW_ON_ERROR));
+        }
+    }
+
+    public function closeConnection(int $fd): void
+    {
+        if ($this->server && $this->server->exist($fd)) {
+            $this->server->disconnect($fd);
+        }
+
+        unset($this->wsConnections[$fd]);
+    }
+
+    public function getConnectionAttributes(int $fd): array
+    {
+        return $this->wsConnections[$fd]['attributes'] ?? [];
+    }
+
+    public function setConnectionAttribute(int $fd, string $key, mixed $value): void
+    {
+        if (isset($this->wsConnections[$fd])) {
+            $this->wsConnections[$fd]['attributes'][$key] = $value;
+        }
+    }
+
+    public function getConnectionAttribute(int $fd, string $key, mixed $default = null): mixed
+    {
+        return $this->wsConnections[$fd]['attributes'][$key] ?? $default;
+    }
 
     private function initializeAndAddGlobalMiddlewares(MiddlewarePipeline $pipeline): void
     {

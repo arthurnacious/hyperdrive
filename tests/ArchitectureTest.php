@@ -163,7 +163,9 @@ class ArchitectureTest extends TestCase
         foreach ($methods as $method) {
             if ($method->getName() === 'withAttribute') {
                 $returnType = $method->getReturnType();
-                $this->assertEquals('self', $returnType?->getName());
+                // PHP >= 8.5 resolves a `self` return type to the declaring
+                // class name via reflection instead of the literal "self".
+                $this->assertContains($returnType?->getName(), ['self', \Hyperdrive\Http\Request::class]);
                 $hasWithAttribute = true;
             }
         }
