@@ -11,6 +11,7 @@ use Hyperdrive\Http\Middleware\ControllerRequestHandler;
 use Hyperdrive\Http\Middleware\MiddlewareInterface;
 use Hyperdrive\Http\Middleware\MiddlewarePipeline;
 use Hyperdrive\Http\Middleware\RequestHandlerInterface;
+use Hyperdrive\Http\Dto\Validation\ValidationException;
 use Hyperdrive\Http\Request;
 use Hyperdrive\Http\Response;
 use Hyperdrive\Routing\Router;
@@ -166,6 +167,8 @@ abstract class AbstractServerDriver extends AbstractDriver
 
             // Execute global middleware pipeline
             return $globalPipeline->handle($request);
+        } catch (ValidationException $e) {
+            return $e->getErrorResponse();
         } catch (\Throwable $e) {
             if ($this->environment !== 'production') {
                 error_log("Middleware pipeline error: " . $e->getMessage());

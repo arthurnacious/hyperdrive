@@ -43,6 +43,6 @@ class HttpServerTest extends TestCase
 
 
         $this->assertEquals(200, $response->getStatusCode());
-        $this->assertStringContainsString('Roadstar: Handled GET /hello', $response->getContent());
+        $this->assertStringContainsString('Hello, Hyperdrive!', $response->getContent());
     }
 }

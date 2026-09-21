@@ -43,7 +43,7 @@ class RoadstarHttpTest extends TestCase
         $response = $driver->handleRequest($request);
 
         $this->assertEquals(200, $response->getStatusCode());
-        $this->assertStringContainsString('Roadstar: Handled GET /users', $response->getContent());
+        $this->assertStringContainsString('Users list', $response->getContent());
     }
 
     public function test_it_returns_404_for_unknown_routes(): void
