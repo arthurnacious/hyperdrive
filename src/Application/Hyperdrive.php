@@ -13,6 +13,7 @@ use Hyperdrive\Drivers\RoadstarDriver;
 use Hyperdrive\Drivers\SwooleDriver;
 use Hyperdrive\Exceptions\DriverNotFoundException;
 use Hyperdrive\Routing\Router;
+use Hyperdrive\WebSocket\WebSocketRegistry;
 
 final class Hyperdrive
 {
@@ -20,6 +21,7 @@ final class Hyperdrive
     private string $environment;
     private Container $container;
     private Router $router;
+    private WebSocketRegistry $webSocketRegistry;
     private ModuleRegistry $moduleRegistry;
 
     private function __construct(
@@ -31,11 +33,13 @@ final class Hyperdrive
         $this->environment = $environment;
         $this->container = new Container();
         $this->router = new Router();
+        $this->webSocketRegistry = new WebSocketRegistry();
         $this->moduleRegistry = new ModuleRegistry();
 
         // Set up dependencies
         $this->moduleRegistry->setContainer($this->container);
         $this->moduleRegistry->setRouter($this->router);
+        $this->moduleRegistry->setWebSocketRegistry($this->webSocketRegistry);
 
         $this->driver = $this->resolveDriver($driver);
     }
@@ -63,6 +67,9 @@ final class Hyperdrive
         // Initialize the module tree
         $this->initializeModules();
 
+        // Catch cross-module dependencies that skip exports/imports
+        $this->moduleRegistry->validateModuleBoundaries();
+
         // Build route map if available
         if (method_exists($this->router, 'buildRouteMap')) {
             $this->router->buildRouteMap();
@@ -71,6 +78,7 @@ final class Hyperdrive
         // Set up the driver with dependencies
         $this->driver->setContainer($this->container);
         $this->driver->setRouter($this->router);
+        $this->driver->setWebSocketRegistry($this->webSocketRegistry);
 
         // Boot the driver
         $this->driver->boot();
@@ -118,6 +126,11 @@ final class Hyperdrive
     public function getRouter(): Router
     {
         return $this->router;
+    }
+
+    public function getWebSocketRegistry(): WebSocketRegistry
+    {
+        return $this->webSocketRegistry;
     }
 
     private function resolveDriver(string $driver): DriverInterface

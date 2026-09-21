@@ -497,8 +497,8 @@ class UserModule {}
 | `imports` | `class-string[]` | Other module classes this module depends on. Imported modules are registered *before* this module's own controllers/bindings, with this module's prefix prepended to whatever prefix they declare. |
 | `controllers` | `class-string[]` | Controller classes to register with the router under this module's effective prefix. |
 | `injectables` | mixed array | Services to make available through the container. See below. |
-| `exports` | `class-string[]` | Declared for NestJS-style documentation of what a module intends other modules to use; the registry exposes `getExports()`, but nothing in the framework currently enforces or consumes it automatically — the container's bindings are process-global regardless of which module registered them. |
-| `gateways` | `class-string[]` | WebSocket gateway classes — see [Known Limitations](#known-limitations) for an important caveat about this. |
+| `exports` | `class-string[]` | Which of this module's `injectables` (by class or interface name) other modules are allowed to depend on. The container itself stays a single flat/global instance — bindings are always technically reachable — but `Hyperdrive::boot()` runs a boundary check (see [Module Boundary Validation](#module-boundary-validation)) that throws if a controller or injectable in one module depends on another module's non-exported (or non-imported) service. |
+| `gateways` | `class-string[]` | WebSocket gateway classes for this module. Automatically registered into the shared `WebSocketRegistry` when the module is registered — see [WebSockets](#websockets). |
 | `static` | `array` | Arbitrary metadata stored and retrievable via `ModuleRegistry::getStatic()`; not otherwise interpreted by the framework. |
 | `prefix` | `string` | This module's own path prefix, combined with its parent's accumulated prefix. |
 
@@ -558,6 +558,56 @@ immediately if that module class was already registered — so it's safe
 for the same module to be imported by two different parent modules
 without its controllers being registered (and its routes duplicated)
 twice.
+
+### Module Boundary Validation
+
+The DI container itself is a single, flat, shared instance for the whole
+application (see [Dependency Injection](#dependency-injection)) — nothing
+about the container's *resolution* mechanism is module-scoped. What *is*
+module-scoped is a **boot-time check**: after the module tree is
+registered, `Hyperdrive::boot()` calls
+`ModuleRegistry::validateModuleBoundaries()`, which reflects the
+constructor of every registered controller and every module's own
+concrete `injectables`, and for each class/interface-typed dependency it
+finds, checks whether that dependency is reachable:
+
+- If nothing registered the dependency as an injectable anywhere in the
+  module tree (e.g. it's a framework class like `Request`, or an
+  unrelated vendor class), the check ignores it — boundaries only apply
+  to classes some module actually declared ownership of.
+- If the dependency is owned by the *same* module that's asking for it,
+  it's always allowed.
+- If it's owned by a *different* module, that owning module must list the
+  dependency (by class **or** interface name — whichever the consumer
+  actually type-hints) in its own `exports`, **and** the consuming module
+  must import the owning module, directly or transitively through its
+  own `imports`.
+
+Violating either rule throws a `Hyperdrive\Exceptions\ModuleBoundaryException`
+with a message telling you exactly which class, which module, and which
+of the two rules (missing `exports` entry vs. missing `imports` entry)
+was broken:
+
+```php
+#[Module(injectables: [BillingService::class])] // no `exports`!
+class BillingModule {}
+
+#[Module(imports: [BillingModule::class], controllers: [InvoiceController::class])]
+class InvoiceModule {}
+
+// InvoiceController's constructor takes a BillingService — boot() throws:
+// "Hyperdrive\...\InvoiceController (registered in Hyperdrive\...\InvoiceModule)
+//  depends on Hyperdrive\...\BillingService, which belongs to
+//  Hyperdrive\...\BillingModule but is not in its exports. Add
+//  Hyperdrive\...\BillingService to Hyperdrive\...\BillingModule's
+//  #[Module(exports: [...])], or drop the dependency."
+```
+
+Adding `exports: [BillingService::class]` to `BillingModule` (or dropping
+the constructor dependency) fixes it. This check runs once per `boot()`
+call, purely via reflection over already-registered metadata — it adds no
+runtime cost to request handling and does not change how a dependency is
+actually resolved once boot succeeds.
 
 ---
 
@@ -1202,16 +1252,21 @@ class ChatGateway
   arbitrary state (e.g. an authenticated user) against a specific
   connection.
 
-`OpenSwooleDriver::boot()` creates a `WebSocketRegistry` and
-`WebSocketGatewayDispatcher`; when it starts its server, it registers
-`handshake`/`message`/`close` handlers that look up the matching gateway
-by path and dispatch to the right method.
+Registering the gateway is automatic — list it in a module's
+`#[Module(gateways: [ChatGateway::class])]` array (like `ChatGateway`
+above) and `Hyperdrive::boot()` registers it into the shared
+`WebSocketRegistry` while walking the module tree, exactly the way
+`controllers` gets registered into the router. A gateway's effective path
+compounds with its module's prefix the same way a controller's does (see
+[Prefix compounding across nested imports](#prefix-compounding-across-nested-imports)).
 
-**Important — see [Known Limitations](#known-limitations):** as of this
-version, listing a gateway in a module's `#[Module(gateways: [...])]`
-array does **not** automatically register it. You currently need to
-register gateways yourself against the registry before the server starts
-listening.
+`OpenSwooleDriver::boot()` receives that already-populated
+`WebSocketRegistry` (falling back to creating an empty one if the driver
+is booted standalone, e.g. in a test, without going through
+`Hyperdrive::boot()`) and creates a `WebSocketGatewayDispatcher`; when it
+starts its server, it registers `handshake`/`message`/`close` handlers
+that look up the matching gateway by path and dispatch to the right
+method.
 
 ---
 
@@ -1302,27 +1357,17 @@ generated CLI arguments in some environments; shipping your own
 ## Known Limitations
 
 Documented plainly, rather than glossed over, since this guide is meant
-to be trustworthy:
+to be trustworthy. Two items that used to be listed here — `#[Module(gateways:
+[...])]` not being auto-registered, and `exports` not being enforced —
+have since been fixed (see [WebSockets](#websockets) and
+[Module Boundary Validation](#module-boundary-validation) respectively).
+What's left:
 
-- **`#[Module(gateways: [...])]` is not yet wired up automatically.**
-  `ModuleRegistry` parses and stores a module's `gateways` array
-  (`ModuleRegistry::getGateways()` returns it), but nothing in
-  `ModuleRegistry::register()` or `Hyperdrive::boot()` currently calls
-  `WebSocketRegistry::registerGateway()` for those classes. Until that's
-  wired up, register your gateways manually — e.g. by extending
-  `OpenSwooleDriver` (or opening a PR against it) to pull the list from
-  `ModuleRegistry::getGateways($rootModule)` after `boot()` and register
-  each one before `listen()` is called.
 - **`swoole` and `openswoole` cannot both be loaded as PHP extensions at
   the same time** — they register the same global compatibility
   functions and PHP will silently refuse to load whichever one comes
   second (alphabetically, in `conf.d`), only emitting a warning. Pick one
   per deployment.
-- **`exports` in `#[Module]` is currently documentation-only.** The
-  registry stores and exposes it, but nothing enforces module boundaries
-  around it — every binding registered anywhere in the module tree is
-  visible to the whole application through the shared container,
-  regardless of whether the owning module "exported" it.
 - **Everything resolved through the container behaves like a
   process-lifetime singleton.** This is fine (even desirable) under
   Roadstar, where the process itself only lives for one request anyway,
@@ -1331,4 +1376,17 @@ to be trustworthy:
   handles, for the life of the worker. Design services and controllers to
   be stateless, or explicitly scope any needed per-request state through
   the `Request` object's `attributes`/`injected` bags instead of instance
-  properties.
+  properties. `exports` boundary validation (above) governs which module
+  a dependency may come from, not how long the resolved instance lives —
+  that's still governed entirely by the container's own singleton-per-name
+  caching.
+- **`#[Module(exports: [...])]` boundary validation only covers
+  constructor dependencies of registered controllers and modules' own
+  concrete `injectables`.** It doesn't (and can't, without much deeper
+  static analysis) trace dependencies resolved dynamically inside a
+  method body (e.g. `$container->get(SomeClass::class)` called directly),
+  a DTO's `validate(...)` method parameters, or middleware classes not
+  also listed in some module's `injectables`. Those are still resolved
+  from the same flat, shared container and will succeed at runtime
+  regardless of module boundaries — the check is a boot-time lint for the
+  common, declarative case, not a runtime access-control layer.

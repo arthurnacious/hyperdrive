@@ -22,14 +22,17 @@ class OpenSwooleDriver extends AbstractServerDriver
 
     /** @var array<int, array{gateway: array, attributes: array}> fd => connection state */
     private array $wsConnections = [];
-    private ?\Hyperdrive\WebSocket\WebSocketRegistry $webSocketRegistry = null;
     private ?\Hyperdrive\WebSocket\WebSocketGatewayDispatcher $webSocketDispatcher = null;
 
     public function boot(): void
     {
         parent::boot();
 
-        $this->webSocketRegistry = new \Hyperdrive\WebSocket\WebSocketRegistry();
+        // A registry may already have been injected via setWebSocketRegistry()
+        // (Hyperdrive::boot() does this after registering the module tree, so
+        // gateways declared in #[Module(gateways: [...])] are already present).
+        // Fall back to an empty one for drivers booted standalone (e.g. tests).
+        $this->webSocketRegistry ??= new \Hyperdrive\WebSocket\WebSocketRegistry();
         $this->webSocketDispatcher = new \Hyperdrive\WebSocket\WebSocketGatewayDispatcher($this->container);
     }
 

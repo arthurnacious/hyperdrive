@@ -15,15 +15,22 @@ use Hyperdrive\Http\Dto\Validation\ValidationException;
 use Hyperdrive\Http\Request;
 use Hyperdrive\Http\Response;
 use Hyperdrive\Routing\Router;
+use Hyperdrive\WebSocket\WebSocketRegistry;
 
 abstract class AbstractServerDriver extends AbstractDriver
 {
     protected string $protocol = 'http';
     protected array $serverOptions = [];
     protected ?ControllerDispatcher $dispatcher = null;
+    protected ?WebSocketRegistry $webSocketRegistry = null;
 
     /** @var MiddlewareInterface[]|null */
     private ?array $globalMiddlewareInstances = null;
+
+    public function setWebSocketRegistry(WebSocketRegistry $webSocketRegistry): void
+    {
+        $this->webSocketRegistry = $webSocketRegistry;
+    }
 
     public function boot(): void
     {

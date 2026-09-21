@@ -13,7 +13,12 @@ class WebSocketRegistry
 {
     private array $gateways = [];
 
-    public function registerGateway(string $gatewayClass): void
+    /**
+     * @param string $modulePrefix Accumulated prefix of the module the gateway
+     *                              was declared in (mirrors how controller
+     *                              prefixes compound across module imports).
+     */
+    public function registerGateway(string $gatewayClass, string $modulePrefix = ''): void
     {
         $reflection = new \ReflectionClass($gatewayClass);
         $gatewayAttribute = $this->getGatewayAttribute($reflection);
@@ -27,6 +32,7 @@ class WebSocketRegistry
         $this->gateways[$gatewayClass] = [
             'path' => $gatewayAttribute->path,
             'prefix' => $gatewayAttribute->prefix,
+            'modulePrefix' => $modulePrefix,
             'methods' => $methods,
             'class' => $gatewayClass,
         ];
@@ -45,13 +51,19 @@ class WebSocketRegistry
     public function getGatewayByPath(string $path): ?array
     {
         foreach ($this->gateways as $gateway) {
-            $fullPath = $this->buildPath($gateway['prefix'], $gateway['path']);
-            if ($fullPath === $path) {
+            if ($this->buildFullPath($gateway) === $path) {
                 return $gateway;
             }
         }
 
         return null;
+    }
+
+    private function buildFullPath(array $gateway): string
+    {
+        $prefix = $this->buildPath($gateway['modulePrefix'] ?? '', $gateway['prefix']);
+
+        return $this->buildPath($prefix, $gateway['path']);
     }
 
     private function getGatewayAttribute(\ReflectionClass $reflection): ?WebSocketGateway
