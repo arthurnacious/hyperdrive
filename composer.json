@@ -3,6 +3,7 @@
     "description": "Hyperdrive - PHP Framework inspired by NestJS with OpenSwoole",
     "version": "0.0.1",
     "type": "library",
+    "license": "MIT",
     "require": {
         "symfony/console": "^6.0 || ^7.0 || ^8.0",
         "php": ">=8.4"
