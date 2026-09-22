@@ -91,9 +91,16 @@ final class Hyperdrive
             error_reporting(E_ALL);
             ini_set('display_errors', '1');
 
-            // Development banner
-            echo "🚀 Hyperdrive Development Mode\n";
-            echo "⚠️  Errors will be logged to console\n\n";
+            // Development banner - only when boot() is running a long-lived
+            // CLI process (e.g. `php server.php` for OpenSwoole/Swoole),
+            // where stdout is a terminal. Under a web SAPI (Roadstar via
+            // php-fpm/apache/`php -S`, cli-server), boot() runs fresh on
+            // every request, so echoing here would prepend this banner to
+            // every single HTTP response body, corrupting JSON responses.
+            if (PHP_SAPI === 'cli') {
+                echo "🚀 Hyperdrive Development Mode\n";
+                echo "⚠️  Errors will be logged to console\n\n";
+            }
         }
     }
 
