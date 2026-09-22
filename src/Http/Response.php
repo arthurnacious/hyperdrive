@@ -132,26 +132,33 @@ class Response
 
     public function send(): void
     {
-        http_response_code($this->status);
+        // Guard against "headers already sent" warnings - e.g. from stray
+        // output earlier in the request (a misplaced echo, a BOM, a
+        // displayed notice) - rather than letting PHP warn on every header
+        // call below. There's nothing useful send() can do about headers
+        // at that point, but the body should still go out.
+        if (!headers_sent()) {
+            http_response_code($this->status);
 
-        // Set cookies before headers
-        foreach ($this->cookies as $name => $cookie) {
-            setcookie(
-                $name,
-                $cookie['value'],
-                [
-                    'expires' => $cookie['expires'],
-                    'path' => $cookie['path'],
-                    'domain' => $cookie['domain'],
-                    'secure' => $cookie['secure'],
-                    'httponly' => $cookie['httponly'],
-                    'samesite' => $cookie['samesite']
-                ]
-            );
-        }
+            // Set cookies before headers
+            foreach ($this->cookies as $name => $cookie) {
+                setcookie(
+                    $name,
+                    $cookie['value'],
+                    [
+                        'expires' => $cookie['expires'],
+                        'path' => $cookie['path'],
+                        'domain' => $cookie['domain'],
+                        'secure' => $cookie['secure'],
+                        'httponly' => $cookie['httponly'],
+                        'samesite' => $cookie['samesite']
+                    ]
+                );
+            }
 
-        foreach ($this->headers as $name => $value) {
-            header("$name: $value");
+            foreach ($this->headers as $name => $value) {
+                header("$name: $value");
+            }
         }
 
         // Handle binary content properly

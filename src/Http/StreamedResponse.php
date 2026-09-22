@@ -20,10 +20,12 @@ class StreamedResponse extends Response
 
     public function send(): void
     {
-        http_response_code($this->getStatusCode());
+        if (!headers_sent()) {
+            http_response_code($this->getStatusCode());
 
-        foreach ($this->getHeaders() as $name => $value) {
-            header("$name: $value");
+            foreach ($this->getHeaders() as $name => $value) {
+                header("$name: $value");
+            }
         }
 
         if (is_resource($this->resource)) {
