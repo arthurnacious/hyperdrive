@@ -128,10 +128,6 @@ abstract class AbstractServerDriver extends AbstractDriver
 
     protected function handleFrameworkRequest(Request $request): Response
     {
-        if ($request->getMethod() === 'OPTIONS') {
-            return new Response('', 204);
-        }
-
         if (!$this->router || !$this->dispatcher) {
             return new Response('Router or Dispatcher not initialized', 500);
         }
@@ -182,27 +178,6 @@ abstract class AbstractServerDriver extends AbstractDriver
             }
             return new Response('Server Error: ' . ($this->environment !== 'production' ? $e->getMessage() : 'Internal error'), 500);
         }
-    }
-
-    /**
-     * Handle OPTIONS preflight requests for CORS
-     * Returns proper CORS headers for browser preflight checks
-     */
-    private function handleOptionsRequest(Request $request): Response
-    {
-        $response = new Response('', 204);
-
-        // Let CORS middleware add headers to it
-        // But CORS middleware isn't in the pipeline for this...
-
-        // Instead, manually add CORS headers
-        return new Response('', 204, [
-            'Access-Control-Allow-Origin' => '*',
-            'Access-Control-Allow-Methods' => 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
-            'Access-Control-Allow-Headers' => 'Content-Type, Authorization, X-Requested-With',
-            'Access-Control-Allow-Credentials' => 'true',
-            'Access-Control-Max-Age' => '86400',
-        ]);;
     }
 
     /**
