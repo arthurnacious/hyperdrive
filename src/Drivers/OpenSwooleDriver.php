@@ -45,14 +45,28 @@ class OpenSwooleDriver extends AbstractServerDriver
         $this->server = new OpenSwooleWebSocketServer($host, $port);
 
         // Set configuration
-        $this->server->set([
+        $serverOptions = [
             'enable_coroutine' => true,
             'open_http_protocol' => true, // Allow HTTP requests too
             'open_websocket_protocol' => true,
             // Recycle workers periodically so any slow leak in app code
             // (or ours) can't accumulate for the life of the process.
             'max_request' => Config::get('server.http.max_request', 10000),
-        ]);
+        ];
+
+        // Optional: hand static files under a document root straight to
+        // OpenSwoole (it serves any request whose path matches a real file
+        // there before 'request' ever fires), so a project can point this
+        // at its public/ directory without writing a passthrough route.
+        if (Config::get('server.static.enabled', false)) {
+            $documentRoot = Config::get('server.static.document_root');
+            if ($documentRoot && is_dir($documentRoot)) {
+                $serverOptions['enable_static_handler'] = true;
+                $serverOptions['document_root'] = $documentRoot;
+            }
+        }
+
+        $this->server->set($serverOptions);
 
         // Register event handlers
         $this->server->on('start', function (OpenSwooleWebSocketServer $server) use ($host, $port) {
