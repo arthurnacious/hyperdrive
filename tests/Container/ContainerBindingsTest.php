@@ -21,4 +21,24 @@ class ContainerBindingsTest extends TestCase
 
         $this->assertInstanceOf(TestImplementation::class, $instance);
     }
+
+    public function test_instance_registers_an_already_built_object_as_the_resolved_singleton(): void
+    {
+        $container = new Container();
+        $preBuilt = new TestImplementation();
+
+        $container->instance(TestImplementation::class, $preBuilt);
+
+        $this->assertSame($preBuilt, $container->get(TestImplementation::class));
+    }
+
+    public function test_instance_can_seed_an_interface_id_too(): void
+    {
+        $container = new Container();
+        $preBuilt = new TestImplementation();
+
+        $container->instance(TestInterface::class, $preBuilt);
+
+        $this->assertSame($preBuilt, $container->get(TestInterface::class));
+    }
 }
