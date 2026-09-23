@@ -15,6 +15,7 @@ final class Module
         public array $injectables = [],
         public array $exports = [],
         public array $gateways = [],
+        public array $listeners = [],
         public array $static = [],
         public string $prefix = ''
     ) {}

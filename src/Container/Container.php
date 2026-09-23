@@ -48,6 +48,18 @@ class Container
         $this->bindings[$abstract] = $concrete;
     }
 
+    /**
+     * Registers an already-built object as the resolved instance for $id,
+     * so get($id) returns exactly this object instead of reflecting and
+     * constructing a new one. For services that must be constructed by
+     * hand (e.g. one that itself needs the Container before the Container
+     * can resolve anything through it), rather than autowired.
+     */
+    public function instance(string $id, object $instance): void
+    {
+        $this->instances[$id] = $instance;
+    }
+
     public function singleton(string $abstract, ?string $concrete = null): void
     {
         if ($concrete === null) {

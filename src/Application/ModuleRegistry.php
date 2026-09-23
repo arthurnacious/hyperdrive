@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hyperdrive\Application;
 
 use Hyperdrive\Container\Container;
+use Hyperdrive\Events\EventDispatcher;
 use Hyperdrive\Exceptions\ModuleBoundaryException;
 use Hyperdrive\Routing\Router;
 use Hyperdrive\Support\PathBuilder;
@@ -16,6 +17,7 @@ class ModuleRegistry
     private ?Container $container = null;
     private ?Router $router = null;
     private ?WebSocketRegistry $webSocketRegistry = null;
+    private ?EventDispatcher $eventDispatcher = null;
 
     public function setContainer(Container $container): void
     {
@@ -30,6 +32,11 @@ class ModuleRegistry
     public function setWebSocketRegistry(WebSocketRegistry $webSocketRegistry): void
     {
         $this->webSocketRegistry = $webSocketRegistry;
+    }
+
+    public function setEventDispatcher(EventDispatcher $eventDispatcher): void
+    {
+        $this->eventDispatcher = $eventDispatcher;
     }
 
     public function register(string $moduleClass, string $parentPrefix = ''): void
@@ -60,6 +67,10 @@ class ModuleRegistry
 
         if ($this->webSocketRegistry) {
             $this->registerModuleGateways($moduleClass, $fullPrefix);
+        }
+
+        if ($this->eventDispatcher) {
+            $this->registerModuleListeners($moduleClass);
         }
 
         if ($this->container) {
@@ -95,6 +106,11 @@ class ModuleRegistry
     public function getGateways(string $moduleClass): array
     {
         return $this->modules[$moduleClass]['gateways'] ?? [];
+    }
+
+    public function getListeners(string $moduleClass): array
+    {
+        return $this->modules[$moduleClass]['listeners'] ?? [];
     }
 
     public function getStatic(string $moduleClass): array
@@ -266,6 +282,7 @@ class ModuleRegistry
                 'injectables' => [],
                 'exports' => [],
                 'gateways' => [],
+                'listeners' => [],
                 'static' => [],
                 'prefix' => ''
             ];
@@ -279,6 +296,7 @@ class ModuleRegistry
             'injectables' => $moduleAttribute->injectables,
             'exports' => $moduleAttribute->exports,
             'gateways' => $moduleAttribute->gateways,
+            'listeners' => $moduleAttribute->listeners,
             'static' => $moduleAttribute->static,
             'prefix' => $moduleAttribute->prefix,
         ];
@@ -291,6 +309,15 @@ class ModuleRegistry
         foreach ($controllers as $controllerClass) {
             if (class_exists($controllerClass)) {
                 $this->router->registerController($controllerClass, $prefix);
+            }
+        }
+    }
+
+    private function registerModuleListeners(string $moduleClass): void
+    {
+        foreach ($this->getListeners($moduleClass) as $listenerClass) {
+            if (class_exists($listenerClass)) {
+                $this->eventDispatcher->registerListenerClass($listenerClass);
             }
         }
     }

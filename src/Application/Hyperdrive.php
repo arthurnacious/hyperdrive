@@ -11,6 +11,7 @@ use Hyperdrive\Contracts\DriverInterface;
 use Hyperdrive\Drivers\OpenSwooleDriver;
 use Hyperdrive\Drivers\RoadstarDriver;
 use Hyperdrive\Drivers\SwooleDriver;
+use Hyperdrive\Events\EventDispatcher;
 use Hyperdrive\Exceptions\DriverNotFoundException;
 use Hyperdrive\Routing\Router;
 use Hyperdrive\WebSocket\WebSocketRegistry;
@@ -22,6 +23,7 @@ final class Hyperdrive
     private Container $container;
     private Router $router;
     private WebSocketRegistry $webSocketRegistry;
+    private EventDispatcher $eventDispatcher;
     private ModuleRegistry $moduleRegistry;
 
     private function __construct(
@@ -34,12 +36,20 @@ final class Hyperdrive
         $this->container = new Container();
         $this->router = new Router();
         $this->webSocketRegistry = new WebSocketRegistry();
+        $this->eventDispatcher = new EventDispatcher($this->container);
         $this->moduleRegistry = new ModuleRegistry();
+
+        // Registered directly (not autowired) so any controller/service
+        // that type-hints EventDispatcher gets this exact instance - the
+        // one ModuleRegistry populates with listeners below - rather than
+        // the container reflecting and constructing a second, empty one.
+        $this->container->instance(EventDispatcher::class, $this->eventDispatcher);
 
         // Set up dependencies
         $this->moduleRegistry->setContainer($this->container);
         $this->moduleRegistry->setRouter($this->router);
         $this->moduleRegistry->setWebSocketRegistry($this->webSocketRegistry);
+        $this->moduleRegistry->setEventDispatcher($this->eventDispatcher);
 
         $this->driver = $this->resolveDriver($driver);
     }
@@ -138,6 +148,11 @@ final class Hyperdrive
     public function getWebSocketRegistry(): WebSocketRegistry
     {
         return $this->webSocketRegistry;
+    }
+
+    public function getEventDispatcher(): EventDispatcher
+    {
+        return $this->eventDispatcher;
     }
 
     private function resolveDriver(string $driver): DriverInterface
