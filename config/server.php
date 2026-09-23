@@ -15,4 +15,11 @@ return [
         'host' => $_ENV['HYPERDRIVE_WEBSOCKET_HOST'] ?? '0.0.0.0',
         'port' => (int) ($_ENV['HYPERDRIVE_WEBSOCKET_PORT'] ?? 3000), // Same as HTTP by default
     ],
+    // Off by default: lets a project serve a public/ directory (uploads,
+    // a storage:link-style symlink, etc.) straight from the server driver
+    // instead of writing its own passthrough controller/route for it.
+    'static' => [
+        'enabled' => filter_var($_ENV['HYPERDRIVE_STATIC_ENABLED'] ?? false, FILTER_VALIDATE_BOOLEAN),
+        'document_root' => $_ENV['HYPERDRIVE_STATIC_DOCUMENT_ROOT'] ?? null,
+    ],
 ];
