@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hyperdrive\Tests;
 
+use Hyperdrive\Attributes\Http\Render;
 use Hyperdrive\Attributes\Http\Route;
 use Hyperdrive\Attributes\Http\Verbs\Delete;
 use Hyperdrive\Attributes\Http\Verbs\Get;
@@ -79,6 +80,7 @@ class ArchitectureTest extends TestCase
             Patch::class,
             Route::class,
             Options::class,
+            Render::class,
         ];
 
         foreach ($verbs as $verb) {
