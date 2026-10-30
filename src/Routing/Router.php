@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hyperdrive\Routing;
 
+use Hyperdrive\Attributes\Http\Render;
 use Hyperdrive\Attributes\Http\Route as RouteAttribute;
 use Hyperdrive\Attributes\Http\Verbs\Delete;
 use Hyperdrive\Attributes\Http\Verbs\Get;
@@ -154,6 +155,7 @@ class Router
     {
         $httpMethod = null;
         $path = '';
+        $view = null;
 
         // Check for HTTP method attributes
         foreach ($method->getAttributes() as $attribute) {
@@ -184,6 +186,9 @@ class Router
                     $httpMethod = 'OPTIONS';
                     $path = $instance->path;
                     break;
+                case Render::class:
+                    $view = $instance->view;
+                    break;
             }
         }
 
@@ -204,7 +209,8 @@ class Router
                 $fullPath,
                 $controllerClass,
                 $method->getName(),
-                $routeMiddlewares
+                $routeMiddlewares,
+                $view
             );
 
             $this->mapBuilt = false;

@@ -10,6 +10,7 @@ use Hyperdrive\Http\ControllerDispatcher;
 use Hyperdrive\Http\Request;
 use Hyperdrive\Http\Response;
 use Hyperdrive\Routing\RouteDefinition;
+use Hyperdrive\View\ViewEngineInterface;
 
 class ControllerRequestHandler implements RequestHandlerInterface
 {
@@ -55,11 +56,31 @@ class ControllerRequestHandler implements RequestHandlerInterface
             return $result;
         }
 
+        // #[Render] routes hand their data to the bound view engine
+        if ($this->route->getView() !== null && ($result === null || is_array($result) || is_object($result))) {
+            $data = is_object($result) ? get_object_vars($result) : ($result ?? []);
+            return $this->render($this->route->getView(), $data);
+        }
+
         if (is_array($result) || is_object($result)) {
             return new \Hyperdrive\Http\JsonResponse((array) $result);
         }
 
         return new Response((string) $result);
+    }
+
+    private function render(string $view, array $data): Response
+    {
+        if (!$this->container->has(ViewEngineInterface::class)) {
+            throw new \RuntimeException(
+                "{$this->route->getControllerClass()}::{$this->route->getMethodName()} uses #[Render('{$view}')] "
+                . "but no ViewEngineInterface is bound - bind one in a module's injectables"
+            );
+        }
+
+        $html = $this->container->get(ViewEngineInterface::class)->render($view, $data);
+
+        return new Response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
     }
 
     /**

@@ -11,7 +11,8 @@ class RouteDefinition
         private string $path,
         private string $controllerClass,
         private string $methodName,
-        private array $middlewares = []
+        private array $middlewares = [],
+        private ?string $view = null
     ) {}
 
     public function matches(string $method, string $path): bool
@@ -51,6 +52,14 @@ class RouteDefinition
     public function getMiddlewares(): array
     {
         return $this->middlewares;
+    }
+
+    /**
+     * View name from #[Render], or null for a plain (JSON) route
+     */
+    public function getView(): ?string
+    {
+        return $this->view;
     }
 
     public function extractParameters(string $path): array
