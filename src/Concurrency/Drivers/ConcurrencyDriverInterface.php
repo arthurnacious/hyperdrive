@@ -22,4 +22,14 @@ interface ConcurrencyDriverInterface
      * Preserves the original order of items
      */
     public function map(array $items, callable $mapper): array;
+
+    /**
+     * Run every operation (concurrently where the driver can) and return
+     * all results under their original keys, in input order. The first
+     * operation to throw has its exception rethrown.
+     *
+     * @param array<array-key, callable> $operations
+     * @return array<array-key, mixed>
+     */
+    public function all(array $operations): array;
 }

@@ -119,4 +119,60 @@ class OpenSwooleConcurrencyDriver implements ConcurrencyDriverInterface
         ksort($results);
         return array_values($results);
     }
+
+    public function all(array $operations): array
+    {
+        if (\OpenSwoole\Coroutine::getCid() > 0) {
+            return $this->executeAllInCoroutine($operations);
+        }
+
+        // Coroutine::run() reports whether the scheduler ran, not the
+        // callback's value, so the outcome is carried out by reference
+        $results = [];
+        $failure = null;
+        \OpenSwoole\Coroutine::run(function () use ($operations, &$results, &$failure) {
+            try {
+                $results = $this->executeAllInCoroutine($operations);
+            } catch (\Throwable $e) {
+                $failure = $e;
+            }
+        });
+
+        if ($failure !== null) {
+            throw $failure;
+        }
+
+        return $results;
+    }
+
+    private function executeAllInCoroutine(array $operations): array
+    {
+        $results = array_fill_keys(array_keys($operations), null);
+        $failure = null;
+        // One slot per operation, used as a completion counter (the
+        // extension has no WaitGroup; that lives in openswoole/core)
+        $finished = new \OpenSwoole\Coroutine\Channel(max(1, count($operations)));
+
+        foreach ($operations as $key => $operation) {
+            \OpenSwoole\Coroutine::create(function () use ($key, $operation, &$results, &$failure, $finished) {
+                try {
+                    $results[$key] = $operation();
+                } catch (\Throwable $e) {
+                    $failure ??= $e;
+                } finally {
+                    $finished->push(true);
+                }
+            });
+        }
+
+        foreach ($operations as $_) {
+            $finished->pop();
+        }
+
+        if ($failure !== null) {
+            throw $failure;
+        }
+
+        return $results;
+    }
 }

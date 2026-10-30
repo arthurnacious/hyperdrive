@@ -28,6 +28,15 @@ final class Concurrent
         return self::getDriver()->map($items, $mapper);
     }
 
+    /**
+     * Keyed operations in, keyed results out:
+     * Concurrent::all(['user' => fn () => ..., 'posts' => fn () => ...])
+     */
+    public static function all(array $operations): array
+    {
+        return self::getDriver()->all($operations);
+    }
+
     public static function setDriver(ConcurrencyDriverInterface $driver): void
     {
         self::$driver = $driver;

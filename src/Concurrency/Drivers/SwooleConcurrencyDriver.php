@@ -82,4 +82,57 @@ class SwooleConcurrencyDriver implements ConcurrencyDriverInterface
         ksort($results);
         return array_values($results);
     }
+
+    public function all(array $operations): array
+    {
+        if (\Swoole\Coroutine::getCid() > 0) {
+            return $this->executeAllInCoroutine($operations);
+        }
+
+        // Coroutine\run() returns whether the scheduler ran, not the
+        // callback's value, so the outcome is carried out by reference
+        $results = [];
+        $failure = null;
+        \Swoole\Coroutine\run(function () use ($operations, &$results, &$failure) {
+            try {
+                $results = $this->executeAllInCoroutine($operations);
+            } catch (\Throwable $e) {
+                $failure = $e;
+            }
+        });
+
+        if ($failure !== null) {
+            throw $failure;
+        }
+
+        return $results;
+    }
+
+    private function executeAllInCoroutine(array $operations): array
+    {
+        $results = array_fill_keys(array_keys($operations), null);
+        $failure = null;
+        $group = new \Swoole\Coroutine\WaitGroup();
+
+        foreach ($operations as $key => $operation) {
+            $group->add();
+            \Swoole\Coroutine::create(function () use ($key, $operation, &$results, &$failure, $group) {
+                try {
+                    $results[$key] = $operation();
+                } catch (\Throwable $e) {
+                    $failure ??= $e;
+                } finally {
+                    $group->done();
+                }
+            });
+        }
+
+        $group->wait();
+
+        if ($failure !== null) {
+            throw $failure;
+        }
+
+        return $results;
+    }
 }

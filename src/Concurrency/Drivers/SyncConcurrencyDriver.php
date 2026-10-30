@@ -48,4 +48,13 @@ class SyncConcurrencyDriver implements ConcurrencyDriverInterface
         }
         return $results;
     }
+
+    public function all(array $operations): array
+    {
+        $results = [];
+        foreach ($operations as $key => $operation) {
+            $results[$key] = $operation();
+        }
+        return $results;
+    }
 }
