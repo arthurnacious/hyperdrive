@@ -84,22 +84,30 @@ class ControllerRequestHandler implements RequestHandlerInterface
     }
 
     /**
-     * Add route-specific middlewares to pipeline
+     * Add route-specific middlewares to pipeline.
+     *
+     * Fails closed: a middleware that is missing, isn't a MiddlewareInterface
+     * or can't be constructed throws, rather than letting the route run
+     * without it - route middleware is typically what guards the route.
      */
     private function addRouteMiddlewares(MiddlewarePipeline $pipeline): void
     {
         foreach ($this->route->getMiddlewares() as $middlewareClass) {
-            if (class_exists($middlewareClass)) {
-                try {
-                    $middleware = $this->container->get($middlewareClass);
-                    if ($middleware instanceof MiddlewareInterface) {
-                        $pipeline->pipe($middleware);
-                    }
-                } catch (\Throwable $e) {
-                    // Log error but continue
-                    error_log("Failed to initialize route middleware {$middlewareClass}: " . $e->getMessage());
-                }
+            if (!class_exists($middlewareClass)) {
+                throw new \RuntimeException("Route middleware {$middlewareClass} does not exist");
             }
+
+            try {
+                $middleware = $this->container->get($middlewareClass);
+            } catch (\Throwable $e) {
+                throw new \RuntimeException("Failed to initialize route middleware {$middlewareClass}: " . $e->getMessage(), 0, $e);
+            }
+
+            if (!$middleware instanceof MiddlewareInterface) {
+                throw new \RuntimeException("Route middleware {$middlewareClass} does not implement " . MiddlewareInterface::class);
+            }
+
+            $pipeline->pipe($middleware);
         }
     }
 }
